@@ -8,4 +8,4 @@ gpytranslate
 jdatetime
 huggingface_hub
 Pillow
-aiogram==2.25.1
+aiogram==3.29.1
