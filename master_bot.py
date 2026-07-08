@@ -200,8 +200,6 @@ def app_store_keyboard(db, user_id):
     fp_text = "✅ پکیج فول VIP" if has_full else f"❌ پکیج فول VIP ({prices.get('full_package', 50)} mAh)"
     kb.append([InlineKeyboardButton(text=fp_text, callback_data="mod_toggle_full_package", style=ButtonStyle.SUCCESS if has_full else ButtonStyle.DANGER)])
     
-    # برای جلوگیری از طولانی شدن بیش از حد کیبورد، فقط دکمه‌های پرکاربرد را می‌آوریم و مابقی را در پنل شیشه‌ای تنظیم می‌کنیم
-    # ولی طبق درخواست شما دکمه‌ها را می‌سازیم
     keys = list(prices.keys())
     keys.remove("full_package")
     keys = [k for k in keys if k not in ["p_ping", "p_info"]]
@@ -210,7 +208,6 @@ def app_store_keyboard(db, user_id):
     for k in keys:
         is_on = k in active or has_full
         icon = "✅" if is_on else "❌"
-        # از اسم‌های خلاصه استفاده می‌کنیم تا جا شود
         name = k.replace("p_", "")
         row.append(InlineKeyboardButton(text=f"{icon} {name} ({prices[k]})", callback_data=f"mod_toggle_{k}", style=ButtonStyle.SUCCESS if is_on else ButtonStyle.DANGER))
         if len(row) == 3:
@@ -306,8 +303,7 @@ async def message_handler(message: Message):
         if not phone.startswith("+"): phone = "+" + phone
         
         await message.answer("⏳ ارتباط با تلگرام...")
-        # تنظیم اسم اختصاصی نشست (Session)
-        temp_client = PyroClient(f"temp_{user_id}", api_id=API_ID, api_hash=API_HASH, device_model="SelfBot Pro", app_version="1.0", in_memory=True)
+        temp_client = PyroClient(f"temp_{user_id}", api_id=API_ID, api_hash=API_HASH, device_model="BizBiz Self", app_version="1.0", in_memory=True)
         await temp_client.connect()
         try:
             sent_code = await temp_client.send_code(phone)
@@ -336,7 +332,6 @@ async def message_handler(message: Message):
         except: await message.answer("❌ پسورد اشتباه است.", reply_markup=cancel_keyboard())
         return
 
-    # --- بخش مدیریت ---
     if user_id == ADMIN_ID:
         if state == "admin_wait_price":
             db["config"]["price_per_mah"] = int(txt); save_db(db); del user_states[user_id]
@@ -435,7 +430,6 @@ async def query_handler(callback_query: CallbackQuery):
     elif data == "admin_panel" and user_id == ADMIN_ID:
         await callback_query.message.edit_text("👨‍💻 <b>پنل مدیریت</b>", reply_markup=admin_reply_keyboard(db))
         
-    # دستورات ادمین
     elif data == "adm_toggle_store" and user_id == ADMIN_ID:
         db["config"]["is_active"] = not db["config"]["is_active"]; save_db(db)
         await callback_query.message.edit_reply_markup(reply_markup=admin_reply_keyboard(db))
