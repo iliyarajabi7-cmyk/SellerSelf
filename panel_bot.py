@@ -18,7 +18,6 @@ API_ID = 6
 API_HASH = "eb06d4abfb49dc3eeb1aeb98ae0f581e"
 BOT_TOKEN = "8946302310:AAErar2ykfD58Xuq4fLrhF9USnaWG4MVIJ0"
 
-# استفاده از HTML برای جلوگیری از کرش کردن ربات در ارسال متن‌های قالب‌بندی شده
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 DB_FILE = "database.json"
@@ -57,18 +56,15 @@ def get_categories_keyboard(user_id):
                 btn_name = names.get(btn_key, btn_key)
                 is_locked = False
                 
-                # بررسی وضعیت قفل بودن قابلیت
                 if btn_key not in free_modules and not has_full_package and btn_key not in active_modules: 
                     btn_name = f"🔒 {btn_name}"
                     is_locked = True
                 
-                # اعمال رنگ متفاوت برای دکمه‌های قفل شده (خاکستری/ثانویه) و باز شده (آبی/اصلی)
                 btn_style = ButtonStyle.SECONDARY if is_locked else ButtonStyle.PRIMARY
                 kb_row.append(InlineKeyboardButton(text=btn_name, callback_data=btn_key, style=btn_style))
                 
             kb.append(kb_row)
             
-        # دکمه بازگشت با رنگ قرمز
         kb.append([InlineKeyboardButton(text="🔙 بازگشت به صفحه اصلی", callback_data="back_to_entry", style=ButtonStyle.DANGER)])
         return InlineKeyboardMarkup(inline_keyboard=kb)
     except Exception: 
@@ -79,7 +75,6 @@ def get_back_button():
         [InlineKeyboardButton(text="🔙 بازگشت", callback_data="enter_panel", style=ButtonStyle.PRIMARY)]
     ])
 
-# تبدیل تمام متون به ساختار HTML جهت اجرای بی‌نقص در ایوگرام
 PANEL_TEXTS = {
     "p_guard": "🛡 <b>نگهبان چت تفکیک‌شده (حفاظت از پیام‌ها)</b>\n\nامکان فعال‌سازی مجزا برای پیوی، گروه و کانال:\n🔸 <code>.نگهبان پیوی حذف روشن</code> ⇦ ارسال پیام‌های پاک شده پیوی برای شما\n🔸 <code>.نگهبان گروه ویرایش روشن</code> ⇦ نمایش متن قبل از ادیتِ افراد در گروه‌ها\n🔸 <code>.نگهبان کانال زماندار روشن</code> ⇦ دانلود مدیاهای زمان‌دار در کانال\n❌ جایگزین کردن کلمه <code>خاموش</code> برای غیرفعال‌سازی.\n\n🎯 <code>.نگهبان گروه افزودن/حذف</code> ⇦ اعمال نگهبان فقط روی گروه‌های هدف\n📋 <code>.نگهبان لیست</code> ⇦ مشاهده لیست گروه‌های تحت نظارت",
     "p_clock": "⏰ <b>تنظیمات ساعت جامع (نام و بیو)</b>\n\n🔸 <code>.ساعت اسم روشن 5</code> ⇦ فعال‌سازی ساعت اسم با فونت ۵\n🔸 <code>.ساعت بیو روشن 9</code> ⇦ ساعت در بیوگرافی با فونت ۹\n❌ <code>.ساعت [اسم/بیو] خاموش</code> ⇦ غیرفعال‌سازی\n\n📝 <b>فونت‌های ساعت:</b>\n<code>1</code>: 12:56 | <code>2</code>: 𝟏𝟐:𝟓𝟔 | <code>3</code>: ¹²:⁵⁶\n<code>4</code>: ₁₂:₅₆ | <code>5</code>: ۱۲:۵۶ | <code>6</code>: ❶❷:❺❻\n<code>7</code>: ①②:⑤⑥ | <code>8</code>: 𝟙𝟚:𝟝𝟞 | <code>9</code>: 𝟭𝟮:𝟱𝟲 | <code>10</code>: 𝟷𝟸:𝟻𝟼",
@@ -133,26 +128,44 @@ async def helper_callback_handler(callback_query: CallbackQuery):
     data = callback_query.data
     user_id = callback_query.from_user.id
     
-    if data == "close_panel": 
-        await callback_query.message.edit_text("✅ <b>پنل بسته شد.</b>", parse_mode=ParseMode.HTML)
-    elif data == "enter_panel": 
-        await callback_query.message.edit_text("🗂 <b>لیست امکانات سلف‌ربات</b>", reply_markup=get_categories_keyboard(user_id), parse_mode=ParseMode.HTML)
-    elif data == "back_to_entry": 
-        await callback_query.message.edit_text(
-            "🤖 <b>داشبورد مدیریت سوپر سلف‌ربات VIP</b> 🤖\n\nبرای دسترسی به امکانات، روی دکمه زیر کلیک کنید 👇", 
-            reply_markup=get_entry_keyboard(), 
-            parse_mode=ParseMode.HTML
-        )
-    elif data in PANEL_TEXTS: 
-        db = load_db()
-        if data not in ["p_ping", "p_info"] and not db.get(str(user_id), {}).get("has_full_package", False) and data not in db.get(str(user_id), {}).get("active_modules", []):
-            return await callback_query.answer("🔒 این قابلیت قفل است!", show_alert=True)
-        await callback_query.message.edit_text(PANEL_TEXTS[data], reply_markup=get_back_button(), parse_mode=ParseMode.HTML)
-        
+    # اطمینان از اینکه کالبک مربوط به پیام اینلاین است
+    if callback_query.inline_message_id:
+        if data == "close_panel": 
+            await bot.edit_message_text(
+                inline_message_id=callback_query.inline_message_id,
+                text="✅ <b>پنل بسته شد.</b>", 
+                parse_mode=ParseMode.HTML
+            )
+        elif data == "enter_panel": 
+            await bot.edit_message_text(
+                inline_message_id=callback_query.inline_message_id,
+                text="🗂 <b>لیست امکانات سلف‌ربات</b>", 
+                reply_markup=get_categories_keyboard(user_id), 
+                parse_mode=ParseMode.HTML
+            )
+        elif data == "back_to_entry": 
+            await bot.edit_message_text(
+                inline_message_id=callback_query.inline_message_id,
+                text="🤖 <b>داشبورد مدیریت سوپر سلف‌ربات VIP</b> 🤖\n\nبرای دسترسی به امکانات، روی دکمه زیر کلیک کنید 👇", 
+                reply_markup=get_entry_keyboard(), 
+                parse_mode=ParseMode.HTML
+            )
+        elif data in PANEL_TEXTS: 
+            db = load_db()
+            if data not in ["p_ping", "p_info"] and not db.get(str(user_id), {}).get("has_full_package", False) and data not in db.get(str(user_id), {}).get("active_modules", []):
+                return await callback_query.answer("🔒 این قابلیت قفل است!", show_alert=True)
+            
+            await bot.edit_message_text(
+                inline_message_id=callback_query.inline_message_id,
+                text=PANEL_TEXTS[data], 
+                reply_markup=get_back_button(), 
+                parse_mode=ParseMode.HTML
+            )
+            
     await callback_query.answer()
 
 async def main():
-    print("🚀 Panel Bot is starting via Aiogram 3 with Colored Buttons...")
+    print("🚀 Panel Bot is starting via Aiogram 3 with Inline Query Support & Colored Buttons...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
