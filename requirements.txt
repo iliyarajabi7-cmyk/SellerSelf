@@ -1,0 +1,11 @@
+pyrogram
+tgcrypto
+requests
+yt-dlp
+edge-tts
+flask
+gpytranslate
+jdatetime
+huggingface_hub
+Pillow
+aiogram==2.25.1
