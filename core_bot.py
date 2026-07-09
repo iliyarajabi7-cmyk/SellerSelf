@@ -11,13 +11,12 @@ from pyrogram import Client, filters, raw, enums
 from pyrogram.errors import FloodWait, UserNotParticipant, AuthKeyUnregistered, SessionExpired
 import edge_tts
 from gpytranslate import Translator
-from huggingface_hub import HfApi
+from huggingface_hub import HfApi, hf_hub_download
 
 API_ID = 6
 API_HASH = "eb06d4abfb49dc3eeb1aeb98ae0f581e"
 DB_FILE = "database.json"
 
-# ⚠️ یوزرنیم ربات پنل و اطلاعات هاگینگ‌فیس را اینجا بگذارید
 HELPER_BOT_USERNAME = "InlineHelper_Bot" 
 REPO_ID = "SnowBig/SellerDB" 
 HF_TOKEN = os.environ.get("HF_TOKEN")
@@ -26,20 +25,28 @@ IRAN_TZ = timezone(timedelta(hours=3, minutes=30))
 USER_SETTINGS = {}
 translator = Translator()
 
-FONTS = {1: "0123456789"}
-FONTS[2] = "0123456789".translate(str.maketrans("0123456789", "𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗"))
-FONTS[3] = "0123456789".translate(str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹"))
-FONTS[4] = "0123456789".translate(str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉"))
-FONTS[5] = "۰۱۲۳۴۵۶۷۸۹"
-FONTS[6] = "0123456789".translate(str.maketrans("0123456789", "⓿❶❷❸❹❺❻❼❽❾"))
-FONTS[7] = "0123456789".translate(str.maketrans("0123456789", "⓪①②③④⑤⑥⑦⑧⑨"))
-FONTS[8] = "0123456789".translate(str.maketrans("0123456789", "𝟘𝟙𝟚𝟛𝟜𝟝𝟞𝟟𝟠𝟡"))
-FONTS[9] = "0123456789".translate(str.maketrans("0123456789", "𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵"))
-FONTS[10] = "0123456789".translate(str.maketrans("0123456789", "𝟶𝟷𝟸𝟹𝟺𝟻𝟼𝟽𝟾𝟿"))
+FONTS = {
+    1: "0123456789",
+    2: "0123456789".translate(str.maketrans("0123456789", "𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗")),
+    3: "0123456789".translate(str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")),
+    4: "0123456789".translate(str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")),
+    5: "۰۱۲۳۴۵۶۷۸۹",
+    6: "0123456789".translate(str.maketrans("0123456789", "⓿❶❷❸❹❺❻❼❽❾")),
+    7: "0123456789".translate(str.maketrans("0123456789", "⓪①②③④⑤⑥⑦⑧⑨")),
+    8: "0123456789".translate(str.maketrans("0123456789", "𝟘𝟙𝟚𝟛𝟜𝟝𝟞𝟟𝟠𝟡")),
+    9: "0123456789".translate(str.maketrans("0123456789", "𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵")),
+    10: "0123456789".translate(str.maketrans("0123456789", "𝟶𝟷𝟸𝟹𝟺𝟻𝟼𝟽𝟾𝟿"))
+}
 
 ACTION_MAP = {"تایپ": enums.ChatAction.TYPING, "ویس": enums.ChatAction.RECORD_AUDIO, "عکس": enums.ChatAction.UPLOAD_PHOTO, "ویدیو": enums.ChatAction.UPLOAD_VIDEO, "گرد": enums.ChatAction.RECORD_VIDEO_NOTE, "سند": enums.ChatAction.UPLOAD_DOCUMENT, "بازی": enums.ChatAction.PLAYING, "استیکر": enums.ChatAction.CHOOSE_STICKER}
 
 def get_iran_time(): return datetime.now(IRAN_TZ)
+
+def download_hf():
+    try:
+        if HF_TOKEN and REPO_ID:
+            hf_hub_download(repo_id=REPO_ID, filename=DB_FILE, repo_type="dataset", token=HF_TOKEN, local_dir=".", force_download=True)
+    except: pass
 
 def load_db():
     if os.path.exists(DB_FILE):
@@ -67,7 +74,7 @@ def get_hourly_drain(db, uid_str):
     u = db.get(uid_str, {})
     config = db.get("config", {})
     prices = config.get("module_prices", {})
-    if u.get("has_full_package", False): return prices.get("full_package", 46)
+    if u.get("has_full_package", False): return prices.get("full_package", 50)
     total = 0
     for m in u.get("active_modules", []): total += prices.get(m, 0)
     return total
@@ -150,8 +157,8 @@ def register_handlers(app, uid):
             "first_comment_channels": set(), "first_comment_text": "اول! 🚀", "welcome_status": False, "welcome_text": "🌹 کاربر عزیز {name}، به گروه خوش آمدید!", "welcome_media": None
         }
 
-    async def safe_edit(message, text):
-        try: await message.edit_text(text, disable_web_page_preview=True)
+    async def safe_edit(message, text, parse_mode=None):
+        try: await message.edit_text(text, disable_web_page_preview=True, parse_mode=parse_mode)
         except: pass
 
     async def locked_msg(message):
@@ -175,7 +182,7 @@ def register_handlers(app, uid):
         if not has_perm(uid, "p_profile"): return await locked_msg(message)
         parts = message.command
         if len(parts) < 2:
-            return await safe_edit(message, "👤 **مدیریت پیشرفته پروفایل**\n\n🔸 `.پروفایل عکس` (ریپلای روی یک عکس)\n🔸 `.پروفایل اسم رضا | محمدی`\n🔸 `.پروفایل بیو [متن]`\n🔸 `.پروفایل یوزرنیم [ID]`\n🔸 `.پروفایل تولد [2005-04-15]`")
+            return await safe_edit(message, "👤 **مدیریت پیشرفته پروفایل**\n\n🔸 `.پروفایل عکس` (ریپلای روی یک عکس)\n🔸 `.پروفایل اسم رضا | محمدی`\n🔸 `.پروفایل بیو [متن]`\n🔸 `.پروفایل یوزرنیم [ID]`")
         act = parts[1]
         try:
             if act == "عکس":
@@ -208,15 +215,30 @@ def register_handlers(app, uid):
                         await safe_edit(message, f"❌ **خطا:** این یوزرنیم توسط شخص دیگری ثبت شده است!\n\n💬 برای پیام به مالک فعلی کلیک کنید: @{uname}")
                     elif "INVALID" in err_str: await safe_edit(message, "❌ **خطا:** یوزرنیم نامعتبر است.")
                     else: await safe_edit(message, f"❌ **خطا در تنظیم:**\n`{e}`")
-            elif act == "تولد":
-                if len(parts) < 3: return await safe_edit(message, "❌ تاریخ را با فرمت سال-ماه-روز وارد کنید. مثال: 2005-04-15")
-                y_str, m_str, d_str = parts[2].split("-")
-                try:
-                    await app.invoke(raw.functions.account.UpdateBirthday(birthday=raw.types.Birthday(day=int(d_str), month=int(m_str), year=int(y_str))))
-                    await safe_edit(message, f"✅ تاریخ تولد شما با موفقیت تنظیم شد.")
-                except Exception as e:
-                    await safe_edit(message, f"❌ خطا در تنظیم تولد:\n`{e}`")
         except Exception as e: await safe_edit(message, f"❌ خطای سیستمی:\n`{e}`")
+
+    @app.on_message(filters.me & filters.command("اسکرین", prefixes="."))
+    async def screenshot_cmd(client, message):
+        if not has_perm(uid, "p_logo"): return await locked_msg(message)
+        if not message.reply_to_message: return await safe_edit(message, "❌ برای گرفتن اسکرین شات (عکس از پیام) روی یک پیام ریپلای کنید و بنویسید `.اسکرین`")
+        await safe_edit(message, "⏳ در حال ساخت عکس از پیام...")
+        try:
+            bot_id = "QuotLyBot"
+            fw = await message.reply_to_message.forward(bot_id)
+            for _ in range(20):
+                await asyncio.sleep(1)
+                async for bot_msg in app.get_chat_history(bot_id, limit=3):
+                    if bot_msg.id > fw.id and bot_msg.photo:
+                        dl = await bot_msg.download()
+                        await app.send_photo(message.chat.id, dl)
+                        os.remove(dl)
+                        await message.delete()
+                        await app.delete_history(bot_id)
+                        return
+            await safe_edit(message, "❌ سرور ربات عکس‌ساز پاسخ نداد.")
+            await app.delete_history(bot_id)
+        except Exception as e:
+            await safe_edit(message, f"❌ خطا: {e}")
 
     @app.on_message(filters.me & filters.command(["سین پیوی", "سین گروه", "سین کانال", "سین ربات"], prefixes="."))
     async def read_all_cmd(client, message):
@@ -432,7 +454,11 @@ def register_handlers(app, uid):
         if not has_perm(uid, "p_dl"): return await locked_msg(message)
         if len(message.command) < 2: return await safe_edit(message, "📥 **دانلودر مدیا قدرتمند**\n\n🔸 `.دانلود [لینک]`")
         link = message.command[1]
-        await safe_edit(message, "⏳ پردازش فایل...")
+        
+        if not re.search(r'(youtube\.com|youtu\.be|instagram\.com|tiktok\.com|t\.me)', link):
+            return await safe_edit(message, "❌ لینک نامعتبر است! این دانلودر فقط از یوتیوب، اینستاگرام، تیک‌تاک و تلگرام پشتیبانی می‌کند.")
+
+        await safe_edit(message, "⏳ در حال دریافت فایل...")
         
         if "t.me/" in link:
             try:
@@ -440,7 +466,7 @@ def register_handlers(app, uid):
                 else: chat_id, msg_id = link.split("/")[3], int(link.split("/")[4])
                 msg = await app.get_messages(chat_id, msg_id)
                 dl_path = await msg.download()
-                await safe_edit(message, "⬆️ آپلود مدیا در این چت...")
+                await safe_edit(message, "⬆️ در حال آپلود...")
                 if msg.photo: await app.send_photo(message.chat.id, dl_path)
                 elif msg.video: await app.send_video(message.chat.id, dl_path)
                 elif msg.document: await app.send_document(message.chat.id, dl_path)
@@ -448,22 +474,19 @@ def register_handlers(app, uid):
                 elif msg.voice: await app.send_voice(message.chat.id, dl_path)
                 else: await app.send_document(message.chat.id, dl_path)
                 os.remove(dl_path); await message.delete(); return
-            except Exception as e: return await safe_edit(message, f"❌ خطا در تلگرام:\n`{e}`")
+            except Exception as e: return await safe_edit(message, f"❌ خطا در دانلود از تلگرام:\n`{e}`")
 
-        # استفاده از ربات واسطه ابری برای دانلود از شبکه‌های اجتماعی و آپلود در چت
+        # دانلودر برای یوتیوب و اینستا با ربات مخفی
         try:
-            bot_id = "SaveAsBot"
+            bot_id = "KhashayarDlBot"
             sent_msg = await app.send_message(bot_id, link)
-            await safe_edit(message, "⏳ ارتباط با سرور ابری (منتظر دریافت مدیا)...")
             downloaded = False
             for _ in range(30):
                 await asyncio.sleep(2)
                 async for bot_msg in app.get_chat_history(bot_id, limit=3):
                     if bot_msg.id > sent_msg.id:
                         if bot_msg.media:
-                            await safe_edit(message, "⬇️ دانلود مدیا از سرور ابری...")
                             dl_path = await bot_msg.download()
-                            await safe_edit(message, "⬆️ آپلود در چت فعلی...")
                             if bot_msg.video: await app.send_video(message.chat.id, dl_path)
                             elif bot_msg.photo: await app.send_photo(message.chat.id, dl_path)
                             elif bot_msg.document: await app.send_document(message.chat.id, dl_path)
@@ -471,13 +494,14 @@ def register_handlers(app, uid):
                             os.remove(dl_path); await message.delete()
                             downloaded = True; break
                         elif bot_msg.text and "error" in bot_msg.text.lower():
-                            await safe_edit(message, "❌ لینک نامعتبر است یا ربات قادر به دانلود آن نیست.")
+                            await safe_edit(message, "❌ خطا! فایل پیدا نشد یا لینک خراب است.")
                             downloaded = True; break
                 if downloaded: break
             if not downloaded: await safe_edit(message, "❌ سرور دانلودر پاسخ نداد (تایم‌اوت).")
+            # پاک کردن مخفیانه هیستوری ربات
             try: await app.delete_history(bot_id)
             except: pass
-        except Exception as e: await safe_edit(message, f"❌ خطا در دانلودر:\n`{e}`")
+        except Exception as e: await safe_edit(message, f"❌ خطا در ارتباط با دانلودر:\n`{e}`")
 
     @app.on_message(filters.me & filters.command("هوش", prefixes="."))
     async def ai_cmd(client, message):
@@ -523,7 +547,6 @@ def register_handlers(app, uid):
             except FloodWait as e: await asyncio.sleep(e.value)
             except: break
 
-    # سیستم پیشرفته قیمت‌دهی ارز دیجیتال
     @app.on_message(filters.me & filters.command(["ارز", "تتر", "بیتکوین", "اتریوم", "دوج", "ترون", "سولانا", "شیبا", "کاردانو", "ریپل"], prefixes="."))
     async def crypto_price(client, message):
         if not has_perm(uid, "p_crypto"): return await locked_msg(message)
@@ -774,10 +797,10 @@ def register_handlers(app, uid):
     async def text_mode_cmd(client, message):
         if not has_perm(uid, "p_textmode"): return await locked_msg(message)
         parts, s = message.command, USER_SETTINGS[uid]
-        if len(parts) < 2: return await safe_edit(message, "✨ **حالت متن**\n\n🎨 `.حالت بولد`\n🎨 `.حالت کج`\n🎨 `.حالت مونو`\n🎨 `.حالت اسپویلر`\n🎨 `.حالت نقل‌قول`\n🔗 `.حالت لینکدار [لینک]`\n❌ `.حالت خاموش`")
-        m = parts[1]
-        if m in ["بولد", "کج", "مونو", "خط‌خورده", "زیرخط", "نقل‌قول", "اسپویلر"]: s["text_mode"] = m; await safe_edit(message, f"✅ حالت {m} تنظیم شد.")
-        elif m == "لینکدار":
+        if len(parts) < 2: return await safe_edit(message, "✨ **حالت متن**\n\n🎨 `.حالت بولد`\n🎨 `.حالت کج`\n🎨 `.حالت مونو`\n🎨 `.حالت اسپویلر`\n🎨 `.حالت نقل قول`\n🔗 `.حالت لینکدار [لینک]`\n❌ `.حالت خاموش`")
+        m = " ".join(parts[1:])
+        if m in ["بولد", "کج", "مونو", "خط‌خورده", "زیرخط", "نقل قول", "اسپویلر"]: s["text_mode"] = m; await safe_edit(message, f"✅ حالت {m} تنظیم شد.")
+        elif m.startswith("لینکدار"):
             if len(parts) < 3: return await safe_edit(message, "❌ لینک را وارد کنید.")
             s["text_mode"] = "link"; s["text_link"] = parts[2]; await safe_edit(message, f"✅ حالت لینکدار تنظیم شد.")
         elif m == "خاموش": s["text_mode"] = None; await safe_edit(message, "❌ استایل متن خاموش شد.")
@@ -883,7 +906,6 @@ def register_handlers(app, uid):
     @app.on_message(filters.private & ~filters.me, group=3)
     async def monshi_responder(client, message):
         if not has_perm(uid, "p_monshi"): return
-        # فیلتر هوشمند منشی برای واکنش فقط به پیام‌های کاربردی و واقعی
         if not getattr(message, "text", None) and not getattr(message, "photo", None) and not getattr(message, "voice", None) and not getattr(message, "video", None) and not getattr(message, "document", None) and not getattr(message, "audio", None) and not getattr(message, "animation", None) and not getattr(message, "sticker", None):
             return
         s = USER_SETTINGS[uid]
@@ -900,7 +922,14 @@ def register_handlers(app, uid):
         if "guardian" not in s: return
         s["message_cache"][message.id] = message
         if len(s["message_cache"]) > 500: s["message_cache"].pop(next(iter(s["message_cache"])))
-        if message.chat.type == enums.ChatType.PRIVATE and s["guardian"]["pv"]["ttl"]:
+        
+        chat_type = message.chat.type
+        is_pv = chat_type == enums.ChatType.PRIVATE
+        if is_pv:
+            if getattr(message.from_user, "is_bot", False) or getattr(message.from_user, "is_self", False):
+                return
+        
+        if is_pv and s["guardian"]["pv"]["ttl"]:
             is_ttl = False
             for m_type in ["photo", "video", "voice", "video_note"]:
                 if getattr(message, m_type, None) and getattr(getattr(message, m_type), "ttl_seconds", None): is_ttl = True; break
@@ -923,6 +952,8 @@ def register_handlers(app, uid):
         is_pv = chat_type == enums.ChatType.PRIVATE
         is_group = chat_type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]
         is_channel = chat_type == enums.ChatType.CHANNEL
+        
+        if is_pv and (getattr(message.from_user, "is_bot", False) or getattr(message.from_user, "is_self", False)): return
         
         guard_conf = s["guardian"]
         if is_pv and not guard_conf["pv"]["edit"]: return
@@ -947,6 +978,8 @@ def register_handlers(app, uid):
                 is_group = chat_type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]
                 is_channel = chat_type == enums.ChatType.CHANNEL
                 
+                if is_pv and (getattr(c.from_user, "is_bot", False) or getattr(c.from_user, "is_self", False)): continue
+                
                 guard_conf = s["guardian"]
                 if is_pv and not guard_conf["pv"]["delete"]: continue
                 if is_group and not guard_conf["group"]["delete"]: continue
@@ -969,8 +1002,7 @@ def register_handlers(app, uid):
                 else: await app.send_message(message.chat.id, msg_text)
             except: pass
 
-    # ارتقا به HTML برای پشتیبانی بی‌نقص از Blockquote و Spoiler
-    @app.on_message(filters.me & filters.text & ~filters.command(["ping", "پینگ", "پنل", "panel", "پروفایل", "هوش", "لینک", "ارز", "تتر", "بیتکوین", "اتریوم", "دوج", "ترون", "سولانا", "شیبا", "کاردانو", "ریپل", "لوگو", "ترجمه", "اهنگ", "ویس", "تگ", "تقلب", "تاس", "ساعت", "تبچی", "اسپم", "پاکسازی", "حذف", "دانلود", "قفل", "فیلتر", "اجباری", "پاسخ", "ریکت", "نگهبان", "انتی", "سکوت", "ازادی", "منشی", "اکشن", "حالت", "ایدی", "قلب", "کامنت", "خوشامد", "سین پیوی", "سین گروه", "سین کانال", "سین ربات", "کیوار", "کانفیگ", "پروکسی"], prefixes=[".", "/", ""]))
+    @app.on_message(filters.me & filters.text & ~filters.command(["ping", "پینگ", "پنل", "panel", "پروفایل", "هوش", "لینک", "ارز", "تتر", "بیتکوین", "اتریوم", "دوج", "ترون", "سولانا", "شیبا", "کاردانو", "ریپل", "لوگو", "ترجمه", "اهنگ", "ویس", "تگ", "تقلب", "تاس", "ساعت", "تبچی", "اسپم", "پاکسازی", "حذف", "دانلود", "قفل", "فیلتر", "اجباری", "پاسخ", "ریکت", "نگهبان", "انتی", "سکوت", "ازادی", "منشی", "اکشن", "حالت", "ایدی", "قلب", "کامنت", "خوشامد", "سین پیوی", "سین گروه", "سین کانال", "سین ربات", "کیوار", "کانفیگ", "پروکسی", "اسکرین"], prefixes=[".", "/", ""]))
     async def auto_text_formatter(client, message):
         if not has_perm(uid, "p_textmode"): return
         m = USER_SETTINGS[uid]["text_mode"]
@@ -981,7 +1013,7 @@ def register_handlers(app, uid):
             elif m == "مونو": fmt = f"<code>{txt}</code>"
             elif m == "خط‌خورده": fmt = f"<s>{txt}</s>"
             elif m == "زیرخط": fmt = f"<u>{txt}</u>"
-            elif m == "نقل‌قول": fmt = f"<blockquote>{txt}</blockquote>"
+            elif m == "نقل قول": fmt = f"<blockquote>{txt}</blockquote>"
             elif m == "اسپویلر": fmt = f"<tg-spoiler>{txt}</tg-spoiler>"
             elif m == "link": fmt = f"<a href='{USER_SETTINGS[uid].get('text_link', '')}'>{txt}</a>"
             else: fmt = txt
@@ -994,6 +1026,7 @@ def hide_annoying_errors(loop, context):
     if "Peer id invalid" not in str(context.get("exception")): loop.default_exception_handler(context)
 
 async def main():
+    download_hf()
     loop = asyncio.get_event_loop()
     loop.set_exception_handler(hide_annoying_errors)
     print("=====================================")
@@ -1045,7 +1078,8 @@ async def main():
                         
                     if uid not in running_clients:
                         try:
-                            app = Client(f"user_{uid}", api_id=API_ID, api_hash=API_HASH, session_string=data["session"], in_memory=True)
+                            # تغییر مشخصات لاگین برای نمایش نام اختصاصی در سشن‌ها
+                            app = Client(f"user_{uid}", api_id=API_ID, api_hash=API_HASH, session_string=data["session"], in_memory=True, device_model="Titan Panel Bot", app_version="1.0.0", system_version="Windows 11")
                             register_handlers(app, uid)
                             await app.start()
                             asyncio.create_task(background_tasks(app, uid))
