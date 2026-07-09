@@ -10,9 +10,9 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.types import (
     InlineKeyboardMarkup, 
     InlineKeyboardButton, 
-    ReplyKeyboardMarkup, 
-    KeyboardButton, 
-    ReplyKeyboardRemove
+    ReplyKeyboardRemove,
+    KeyboardButton,
+    ReplyKeyboardMarkup
 )
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode, ButtonStyle
@@ -62,7 +62,7 @@ def upload_to_hf():
     try:
         if HF_TOKEN:
             api = HfApi()
-            api.upload_file(path_or_fileobj=DB_FILE, path_in_repo=DB_FILE, repo_id=REPO_ID, repo_type="dataset", token=HF_TOKEN, commit_message="Update DB via MasterBot (Aiogram 3 Colored)")
+            api.upload_file(path_or_fileobj=DB_FILE, path_in_repo=DB_FILE, repo_id=REPO_ID, repo_type="dataset", token=HF_TOKEN, commit_message="Update DB via MasterBot")
     except Exception: pass
 
 def save_db(data):
@@ -81,24 +81,14 @@ if "config" not in users_db:
         "price_per_mah": 1, 
         "gift_codes": {},
         "module_prices": { 
-            "full_package": 50, "p_textmode": 1, "p_clock": 3, "p_guard": 2, 
-            "p_ping": 0, "p_logo": 1, "p_locks": 2, "p_action": 1, 
-            "p_monshi": 1, "p_filter": 1, "p_autoreply": 1, "p_forcejoin": 2, 
-            "p_dl": 2, "p_react": 1, "p_spam": 1, "p_mute": 1, 
-            "p_info": 1, "p_tag": 2, "p_purge": 2, "p_ai": 3, 
-            "p_translate": 2, "p_anim": 1, "p_cheat": 2, "p_tts": 1, 
-            "p_music": 2, "p_tabchi": 3, "p_comment": 2, "p_crypto": 1,
-            "p_readall": 1, "p_v2ray": 2, "p_qr": 1, "p_profile": 1
-        },
-        "menu_layout": [
-            ["my_sub", "buy_mah"],
-            ["my_account", "free_test"],
-            ["support_menu"]
-        ],
-        "menu_names": {
-            "my_sub": "🎛 مدیریت سلف من", "buy_mah": "🔋 خرید شارژ (میلی‌آمپر)",
-            "my_account": "👤 حساب کاربری", "free_test": "🎁 سرویس تست (رایگان)", 
-            "support_menu": "👨‍💻 پشتیبانی", "admin_panel": "🎛 پنل مدیریت"
+            "full_package": 50, "p_clock": 5, "p_guard": 4, "p_tabchi": 4, 
+            "p_dl": 3, "p_ai": 3, "p_v2ray": 2, "p_music": 2, 
+            "p_tag": 2, "p_locks": 2, "p_translate": 2, "p_comment": 2, 
+            "p_cheat": 2, "p_purge": 2, "p_textmode": 1, "p_logo": 1, 
+            "p_action": 1, "p_monshi": 1, "p_filter": 1, "p_autoreply": 1, 
+            "p_forcejoin": 1, "p_react": 1, "p_spam": 1, "p_mute": 1, 
+            "p_anim": 1, "p_tts": 1, "p_crypto": 1, "p_readall": 1, 
+            "p_qr": 1, "p_profile": 1, "p_ping": 0, "p_info": 0
         },
         "panel_config": {
             "layout": [
@@ -144,14 +134,14 @@ def init_user(user_id):
 
 def get_hourly_drain(user_id):
     u = users_db[str(user_id)]
-    if u.get("has_full_package", False): return users_db["config"]["module_prices"].get("full_package", 46)
+    if u.get("has_full_package", False): return users_db["config"]["module_prices"].get("full_package", 50)
     total = 0
     for m in u.get("active_modules", []): total += users_db["config"]["module_prices"].get(m, 0)
     return total
 
 def get_temp_hourly_drain(user_id):
     u = users_db[str(user_id)]
-    if u.get("temp_has_full", False): return users_db["config"]["module_prices"].get("full_package", 46)
+    if u.get("temp_has_full", False): return users_db["config"]["module_prices"].get("full_package", 50)
     total = 0
     for m in u.get("temp_modules", []): total += users_db["config"]["module_prices"].get(m, 0)
     return total
@@ -186,7 +176,7 @@ def get_app_store_text(user_id):
         text += "⏸ *وضعیت فعلی سلف: خاموش*\nآزادانه تیک‌ها را تغییر دهید. کسر شارژ پس از تایید نهایی انجام خواهد شد.\n\n"
 
     text += "📋 *لیست انتخاب‌های فعلی شما:*\n"
-    if has_full: text += f"👑 پکیج فول VIP — مصرف: `{prices.get('full_package', 46)}` میلی‌آمپر\n"
+    if has_full: text += f"👑 پکیج فول VIP — مصرف: `{prices.get('full_package', 50)}` میلی‌آمپر\n"
     elif not active_modules: text += "➖ هیچ قابلیتی انتخاب نشده است.\n"
     else:
         for m in active_modules:
@@ -197,18 +187,27 @@ def get_app_store_text(user_id):
     return text
 
 def main_menu_keyboard(user_id):
-    b_names = users_db["config"]["menu_names"]
-    b_layout = users_db["config"]["menu_layout"]
-    kb = []
-    
-    for row in b_layout:
-        row_buttons = [KeyboardButton(text=b_names.get(key, key)) for key in row]
-        if row_buttons: kb.append(row_buttons)
-        
+    kb = [
+        [InlineKeyboardButton(text="🎛 مدیریت سلف من", callback_data="my_sub"), InlineKeyboardButton(text="🔋 خرید شارژ", callback_data="buy_mah")],
+        [InlineKeyboardButton(text="👤 حساب کاربری", callback_data="my_account"), InlineKeyboardButton(text="🎁 تست رایگان", callback_data="free_test")],
+        [InlineKeyboardButton(text="💸 انتقال شارژ", callback_data="transfer_mah"), InlineKeyboardButton(text="👨‍💻 پشتیبانی", callback_data="support_menu")],
+    ]
     if user_id == ADMIN_ID: 
-        kb.append([KeyboardButton(text=b_names.get("admin_panel", "🎛 پنل مدیریت"))])
-    kb.append([KeyboardButton(text="🎛 پنل امکانات شیشه‌ای")])
-    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+        kb.append([InlineKeyboardButton(text="🎛 پنل مدیریت", callback_data="admin_panel")])
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
+def admin_inline_keyboard():
+    conf = users_db["config"]
+    status_btn = "🔴 خاموش کردن فروشگاه" if conf["is_active"] else "🟢 روشن کردن فروشگاه"
+    kb = [
+        [InlineKeyboardButton(text=status_btn, callback_data="adm_toggle_shop"), InlineKeyboardButton(text="💰 تغییر قیمت", callback_data="adm_price_mah")],
+        [InlineKeyboardButton(text="🛠 تعیین مصرف قابلیت‌ها", callback_data="adm_price_mods"), InlineKeyboardButton(text="🎁 ساخت تخفیف", callback_data="adm_gift_code")],
+        [InlineKeyboardButton(text="💳 افزایش شارژ", callback_data="adm_fund_user"), InlineKeyboardButton(text="➖ حذف شارژ", callback_data="adm_unfund_user")],
+        [InlineKeyboardButton(text="📢 ارسال پیام برای همه", callback_data="adm_broadcast")],
+        [InlineKeyboardButton(text="♾ فعال‌سازی بینهایت", callback_data="adm_inf_charge")],
+        [InlineKeyboardButton(text="🔙 خروج", callback_data="adm_exit")]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=kb)
 
 def payment_method_keyboard(amount, price, code="NONE"):
     kb = []
@@ -218,29 +217,7 @@ def payment_method_keyboard(amount, price, code="NONE"):
     kb.append([InlineKeyboardButton(text="❌ انصراف", callback_data="cancel_action", style=ButtonStyle.DANGER)])
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
-def admin_reply_keyboard():
-    conf = users_db["config"]
-    status_btn = "🔴 خاموش کردن فروشگاه" if conf["is_active"] else "🟢 روشن کردن فروشگاه"
-    kb = [
-        [KeyboardButton(text=status_btn), KeyboardButton(text="💰 تغییر قیمت میلی‌آمپر")],
-        [KeyboardButton(text="🛠 تعیین مصرف قابلیت‌ها"), KeyboardButton(text="🎁 ساخت کد تخفیف")],
-        [KeyboardButton(text="💳 شارژ پاوربانک کاربر"), KeyboardButton(text="🎮 شخصی‌سازی منو")],
-        [KeyboardButton(text="♾ فعال‌سازی بینهایت")],
-        [KeyboardButton(text="🔙 خروج از پنل مدیریت")]
-    ]
-    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
-
-def menu_customize_keyboard():
-    kb = [
-        [KeyboardButton(text="✏️ تغییر نام دکمه"), KeyboardButton(text="🔀 جابجایی دکمه‌ها")],
-        [KeyboardButton(text="🗑 حذف دکمه"), KeyboardButton(text="➕ بازگردانی دکمه")],
-        [KeyboardButton(text="🔙 بازگشت به تنظیمات")]
-    ]
-    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
-
-def cancel_keyboard(admin=False): 
-    if admin: 
-        return ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ لغو")]], resize_keyboard=True)
+def cancel_keyboard(): 
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❌ لغو عملیات", callback_data="cancel_action", style=ButtonStyle.DANGER)]
     ])
@@ -255,7 +232,7 @@ def app_store_keyboard(user_id):
     
     kb = []
     
-    fp_text = "✅ پکیج فول VIP" if has_full else f"❌ پکیج فول VIP ({prices.get('full_package', 46)} mAh)"
+    fp_text = "✅ پکیج فول VIP" if has_full else f"❌ پکیج فول VIP ({prices.get('full_package', 50)} mAh)"
     fp_style = ButtonStyle.SUCCESS if has_full else ButtonStyle.DANGER
     kb.append([InlineKeyboardButton(text=fp_text, callback_data="mod_toggle_full_package", style=fp_style)])
     
@@ -290,19 +267,14 @@ def admin_module_price_keyboard():
             row_btns.append(InlineKeyboardButton(text=f"{names.get(key, key)} ({cost})", callback_data=f"adm_mod_price_{key}", style=ButtonStyle.PRIMARY))
         kb.append(row_btns)
         
-    kb.append([InlineKeyboardButton(text="❌ بستن", callback_data="cancel_action", style=ButtonStyle.DANGER)])
+    kb.append([InlineKeyboardButton(text="🔙 بازگشت به پنل", callback_data="admin_panel", style=ButtonStyle.DANGER)])
     return InlineKeyboardMarkup(inline_keyboard=kb)
-
-def get_active_buttons():
-    active = []
-    for row in users_db["config"]["menu_layout"]:
-        for k in row: active.append(k)
-    return active
 
 async def cancel_and_refund(user_id, message_obj=None):
     if user_id in temp_clients:
-        try: await temp_clients[user_id]["client"].disconnect()
-        except: pass
+        if "client" in temp_clients[user_id]:
+            try: await temp_clients[user_id]["client"].disconnect()
+            except: pass
         del temp_clients[user_id]
     if user_id in user_states: del user_states[user_id]
     if message_obj:
@@ -316,7 +288,7 @@ async def send_manage_self_menu(user_id, callback_query=None):
     drain = get_hourly_drain(user_id)
     rem_time = calculate_remaining_time(user_id)
     
-    text = f"🎛 *پنل مدیریت سلف‌ربات شما*\n\n🔋 موجودی پاوربانک: `{mah:,}` میلی‌آمپر\n⚡️ مصرف فعلی: `{drain}` میلی‌آمپر در ساعت\n⏱ زمان تقریبی روشن ماندن: *{rem_time}*\n\n💡 *نکته:* برای ۱ ماه استفاده ۲۴ ساعته از پکیج فول، به *33,120 میلی‌آمپر* شارژ نیاز دارید.\n"
+    text = f"🎛 *پنل مدیریت سلف‌ربات شما*\n\n🔋 موجودی پاوربانک: `{mah:,}` میلی‌آمپر\n⚡️ مصرف فعلی: `{drain}` میلی‌آمپر در ساعت\n⏱ زمان تقریبی روشن ماندن: *{rem_time}*\n\n💡 *نکته:* برای ۱ ماه استفاده ۲۴ ساعته از پکیج فول، به *36,000 میلی‌آمپر* شارژ نیاز دارید.\n"
     
     kb = []
     if status == "inactive":
@@ -332,7 +304,8 @@ async def send_manage_self_menu(user_id, callback_query=None):
             
         kb.append([InlineKeyboardButton(text="🛍 فروشگاه قابلیت‌ها (نصب ماژول)", callback_data="open_app_store", style=ButtonStyle.PRIMARY)])
         kb.append([InlineKeyboardButton(text="🔄 لاگین مجدد اکانت", callback_data="start_login_flow", style=ButtonStyle.DANGER)])
-        
+    
+    kb.append([InlineKeyboardButton(text="🔙 بازگشت به منوی اصلی", callback_data="main_menu", style=ButtonStyle.SECONDARY)])
     markup = InlineKeyboardMarkup(inline_keyboard=kb)
     if callback_query: 
         await callback_query.message.edit_text(text, reply_markup=markup, parse_mode="Markdown")
@@ -343,170 +316,23 @@ async def send_manage_self_menu(user_id, callback_query=None):
 async def message_handler(message: types.Message):
     global users_db; users_db = load_db(); user_id = message.chat.id
     init_user(user_id)
-    b_names = users_db["config"]["menu_names"]
     
     txt = "" 
     if message.contact: txt = "contact"
     elif message.text: txt = message.text
     elif message.photo: txt = "photo"
-
-    if txt == ".پنل": 
-        return await message.answer("❌ *دقت کنید:*\nشما باید دستور `.پنل` را در *اکانت خودتان* ارسال کنید، نه در ربات فروشگاه!")
     
-    if txt in ["/start", "❌ لغو", "❌ لغو عملیات"]:
+    if txt == "/start":
         await cancel_and_refund(user_id)
-        if txt == "/start": 
-            return await message.answer("👋 *به فروشگاه رسمی سلف‌ربات خوش آمدید!*", reply_markup=main_menu_keyboard(user_id))
-        elif user_id == ADMIN_ID and txt == "❌ لغو": 
-            return await message.answer("✅ عملیات لغو شد.", reply_markup=admin_reply_keyboard())
-        else: 
-            return await message.answer("✅ عملیات لغو شد.", reply_markup=main_menu_keyboard(user_id))
+        return await message.answer("👋 *به فروشگاه رسمی سلف‌ربات خوش آمدید!*\nاز منوی زیر استفاده کنید:", reply_markup=main_menu_keyboard(user_id))
 
     state = user_states.get(user_id, "")
-
-    if user_id == ADMIN_ID:
-        if txt in [b_names.get("admin_panel", "🎛 پنل مدیریت"), "/admin"]:
-            if user_id in user_states: del user_states[user_id]
-            return await message.answer("👨‍💻 *ورود به پنل مدیریت کیبوردی ادمین*", reply_markup=admin_reply_keyboard())
-        elif txt == "🔙 خروج از پنل مدیریت": return await message.answer("✅ خارج شدید.", reply_markup=main_menu_keyboard(user_id))
-        elif txt == "🔙 بازگشت به تنظیمات": return await message.answer("👨‍💻 پنل ادمین:", reply_markup=admin_reply_keyboard())
-        elif txt in ["🔴 خاموش کردن فروشگاه", "🟢 روشن کردن فروشگاه"]:
-            users_db["config"]["is_active"] = not users_db["config"]["is_active"]; save_db(users_db)
-            return await message.answer(f"✅ انجام شد.", reply_markup=admin_reply_keyboard())
-        elif txt == "🎮 شخصی‌سازی منو": return await message.answer("🛠 *تنظیمات پیشرفته دکمه‌های فروشگاه*", reply_markup=menu_customize_keyboard())
-        elif txt == "🗑 حذف دکمه":
-            active = get_active_buttons(); user_states[user_id] = "admin_wait_btn_del"
-            msg = "کدام دکمه را می‌خواهید حذف کنید؟\n\n" + "".join([f"{i+1}. {b_names.get(k, k)}\n" for i, k in enumerate(active)])
-            return await message.answer(msg, reply_markup=cancel_keyboard(admin=True))
-        elif txt == "➕ بازگردانی دکمه":
-            active = get_active_buttons(); all_keys = list(b_names.keys()); all_keys.remove("admin_panel"); hidden = [k for k in all_keys if k not in active]
-            if not hidden: return await message.answer("هیچ دکمه پنهانی وجود ندارد.")
-            user_states[user_id] = "admin_wait_btn_add"; temp_clients[user_id] = {"hidden": hidden}
-            msg = "کدام دکمه را برمی‌گردانید؟\n\n" + "".join([f"{i+1}. {b_names.get(k, k)}\n" for i, k in enumerate(hidden)])
-            return await message.answer(msg, reply_markup=cancel_keyboard(admin=True))
-        elif txt == "✏️ تغییر نام دکمه":
-            active = get_active_buttons(); user_states[user_id] = "admin_wait_btn_ren_sel"; temp_clients[user_id] = {"active": active}
-            msg = "نام کدام دکمه را تغییر می‌دهید؟\n\n" + "".join([f"{i+1}. {b_names.get(k, k)}\n" for i, k in enumerate(active)])
-            return await message.answer(msg, reply_markup=cancel_keyboard(admin=True))
-        elif txt == "🔀 جابجایی دکمه‌ها":
-            active = get_active_buttons(); user_states[user_id] = "admin_wait_btn_swap"; temp_clients[user_id] = {"active": active}
-            msg = "شماره دو دکمه را با خط تیره بفرستید:\n\n" + "".join([f"{i+1}. {b_names.get(k, k)}\n" for i, k in enumerate(active)])
-            return await message.answer(msg, reply_markup=cancel_keyboard(admin=True))
-        elif txt == "💰 تغییر قیمت میلی‌آمپر":
-            user_states[user_id] = "admin_wait_mah_price"
-            return await message.answer(f"💰 قیمت فعلی: `{users_db['config']['price_per_mah']}`\nقیمت جدید:", reply_markup=cancel_keyboard(admin=True))
-        elif txt == "🛠 تعیین مصرف قابلیت‌ها": return await message.answer("🛠 *تعیین میزان مصرف باتری:*", reply_markup=admin_module_price_keyboard())
-        elif txt == "💳 شارژ پاوربانک کاربر":
-            user_states[user_id] = "admin_wait_fund_uid"
-            return await message.answer("💳 لطفاً *آیدی عددی* کاربر را بفرستید:", reply_markup=cancel_keyboard(admin=True))
-        elif txt == "🎁 ساخت کد تخفیف":
-            user_states[user_id] = "admin_wait_gift_code"
-            return await message.answer("🎁 *نام کد* را وارد کنید:", reply_markup=cancel_keyboard(admin=True))
-        elif txt == "♾ فعال‌سازی بینهایت":
-            users_db[str(user_id)]["mah_balance"] += 999999999; save_db(users_db)
-            return await message.answer("✅ ۹۹۹ میلیون میلی‌آمپر واریز شد!", reply_markup=admin_reply_keyboard())
-
-        if state == "admin_wait_mah_price":
-            if not message.text.isdigit(): return await message.answer("❌ فقط عدد.")
-            users_db["config"]["price_per_mah"] = int(message.text); save_db(users_db); del user_states[user_id]
-            return await message.answer("✅ انجام شد.", reply_markup=admin_reply_keyboard())
-        elif state.startswith("adm_wait_mod_price_"):
-            if not message.text.isdigit(): return await message.answer("❌ فقط عدد.")
-            mod_key = state.split("adm_wait_mod_price_")[1]; val = int(message.text)
-            if mod_key == "ALL":
-                for k in users_db["config"]["module_prices"]:
-                    if k != "full_package": users_db["config"]["module_prices"][k] = val
-            else: users_db["config"]["module_prices"][mod_key] = val
-            save_db(users_db); del user_states[user_id]; return await message.answer(f"✅ مصرف آپدیت شد.", reply_markup=admin_module_price_keyboard())
-        elif state == "admin_wait_btn_del":
-            if not message.text.isdigit(): return await message.answer("❌ فقط عدد.")
-            idx = int(message.text) - 1; active = get_active_buttons()
-            if idx < 0 or idx >= len(active): return await message.answer("❌ نامعتبر.")
-            target_key = active[idx]
-            for row in users_db["config"]["menu_layout"]:
-                if target_key in row:
-                    row.remove(target_key)
-                    if not row: users_db["config"]["menu_layout"].remove(row)
-                    break
-            save_db(users_db); del user_states[user_id]; return await message.answer(f"✅ دکمه مخفی شد.", reply_markup=menu_customize_keyboard())
-        elif state == "admin_wait_btn_add":
-            if not message.text.isdigit(): return await message.answer("❌ فقط عدد.")
-            hidden = temp_clients[user_id]["hidden"]; idx = int(message.text) - 1
-            if idx < 0 or idx >= len(hidden): return await message.answer("❌ نامعتبر.")
-            users_db["config"]["menu_layout"].append([hidden[idx]]); save_db(users_db); del user_states[user_id]; del temp_clients[user_id]
-            return await message.answer("✅ دکمه اضافه شد.", reply_markup=menu_customize_keyboard())
-        elif state == "admin_wait_btn_ren_sel":
-            if not message.text.isdigit(): return await message.answer("❌ فقط عدد.")
-            active = temp_clients[user_id]["active"]; idx = int(message.text) - 1
-            if idx < 0 or idx >= len(active): return await message.answer("❌ نامعتبر.")
-            temp_clients[user_id]["target_key"] = active[idx]; user_states[user_id] = "admin_wait_btn_ren_val"
-            return await message.answer("✏️ نام جدید:", reply_markup=cancel_keyboard(admin=True))
-        elif state == "admin_wait_btn_ren_val":
-            target = temp_clients[user_id]["target_key"]; users_db["config"]["menu_names"][target] = message.text.strip(); save_db(users_db)
-            del user_states[user_id]; del temp_clients[user_id]; return await message.answer("✅ نام دکمه تغییر یافت.", reply_markup=menu_customize_keyboard())
-        elif state == "admin_wait_btn_swap":
-            if "-" not in message.text: return await message.answer("❌ با خط تیره جدا کنید.")
-            try: i1, i2 = map(int, message.text.split("-")); i1 -= 1; i2 -= 1
-            except: return await message.answer("❌ نامعتبر.")
-            layout = users_db["config"]["menu_layout"]; flat_coords = [(r, c) for r in range(len(layout)) for c in range(len(layout[r]))]
-            if i1 < 0 or i1 >= len(flat_coords) or i2 < 0 or i2 >= len(flat_coords): return await message.answer("❌ نامعتبر.")
-            r1, c1 = flat_coords[i1]; r2, c2 = flat_coords[i2]
-            layout[r1][c1], layout[r2][c2] = layout[r2][c2], layout[r1][c1]; save_db(users_db)
-            del user_states[user_id]; del temp_clients[user_id]; return await message.answer("✅ جای دکمه‌ها عوض شد.", reply_markup=menu_customize_keyboard())
-        elif state == "admin_wait_fund_uid":
-            if not message.text.isdigit(): return await message.answer("❌ آیدی باید عددی باشد.")
-            temp_clients[ADMIN_ID] = {"target_fund_uid": message.text}; user_states[user_id] = "admin_wait_fund_amount"
-            return await message.answer(f"✅ آیدی `{message.text}` دریافت شد.\n💰 مقداری شارژ:", reply_markup=cancel_keyboard(admin=True))
-        elif state == "admin_wait_fund_amount":
-            if not message.text.isdigit(): return await message.answer("❌ فقط مقدار عددی.")
-            amount = int(message.text); target_id = temp_clients[ADMIN_ID]["target_fund_uid"]
-            init_user(target_id); users_db[target_id]["mah_balance"] += amount; save_db(users_db)
-            del user_states[user_id]; del temp_clients[ADMIN_ID]
-            await message.answer(f"✅ مقدار `{amount:,}` اضافه شد.", reply_markup=admin_reply_keyboard())
-            try: await bot.send_message(int(target_id), f"🎁 *حساب شما توسط مدیریت شارژ شد!*\nمقدار `{amount:,}` میلی‌آمپر اضافه گردید.")
-            except: pass
-            return
-        elif state == "admin_wait_gift_code":
-            code_name = message.text.strip().upper(); temp_clients[ADMIN_ID] = {"gift_code": code_name}; user_states[user_id] = "admin_wait_gift_value"
-            return await message.answer(f"✅ کد `{code_name}` ثبت شد.\n💰 مقدار تخفیف (به تومان - با % برای درصد):", reply_markup=cancel_keyboard(admin=True))
-        elif state == "admin_wait_gift_value":
-            v_txt = message.text.strip(); g_type = "percent" if v_txt.endswith("%") else "fixed"; val = v_txt[:-1] if g_type == "percent" else v_txt
-            if not val.isdigit(): return await message.answer("❌ نامعتبر."); temp_clients[ADMIN_ID]["gift_value"] = int(val); temp_clients[ADMIN_ID]["gift_type"] = g_type; user_states[user_id] = "admin_wait_gift_uses"
-            return await message.answer("👥 این کد برای چند نفر قابل استفاده باشد؟", reply_markup=cancel_keyboard(admin=True))
-        elif state == "admin_wait_gift_uses":
-            if not message.text.isdigit(): return await message.answer("❌ فقط عدد."); temp_clients[ADMIN_ID]["gift_uses"] = int(message.text); user_states[user_id] = "admin_wait_gift_expire"
-            return await message.answer("⏳ چند روز اعتبار داشته باشد؟ (0 = بدون انقضا):", reply_markup=cancel_keyboard(admin=True))
-        elif state == "admin_wait_gift_expire":
-            if not message.text.isdigit(): return await message.answer("❌ فقط عدد.")
-            days = int(message.text); exp_str = "NONE" if days == 0 else (get_iran_time().replace(tzinfo=None) + timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
-            code = temp_clients[ADMIN_ID]["gift_code"]; val = temp_clients[ADMIN_ID]["gift_value"]; g_type = temp_clients[ADMIN_ID]["gift_type"]; uses = temp_clients[ADMIN_ID]["gift_uses"]
-            users_db["config"]["gift_codes"][code] = {"type": g_type, "value": val, "uses": uses, "used_by": [], "expire": exp_str}
-            save_db(users_db); del user_states[user_id]; del temp_clients[ADMIN_ID]; return await message.answer(f"🎉 *کد تخفیف ساخته شد!*\nکد: `{code}`", reply_markup=admin_reply_keyboard())
-
-    if not users_db["config"]["is_active"] and user_id != ADMIN_ID: return await message.answer("⚠️ *فروشگاه در حال بروزرسانی است.*")
-
-    if txt == b_names.get("buy_mah", "🔋 خرید شارژ (میلی‌آمپر)"):
-        user_states[user_id] = "wait_mah_amount"; ppc = users_db["config"]["price_per_mah"]
-        msg = f"🔋 *خرید شارژ پاوربانک*\n\nقیمت هر میلی‌آمپر: `{ppc}` تومان\n\n🔢 *لطفاً مقدار میلی‌آمپر مورد نیاز را به عدد بفرستید:*"
-        return await message.answer(msg, reply_markup=cancel_keyboard())
-
-    elif txt == b_names.get("my_sub", "🎛 مدیریت سلف من"): return await send_manage_self_menu(user_id)
-    elif txt == b_names.get("my_account", "👤 حساب کاربری"):
-        u_data = users_db[str(user_id)]
-        return await message.answer(f"👤 شناسه: `{user_id}`\n💰 موجودی: `{u_data.get('mah_balance', 0):,}` میلی‌آمپر\n📆 عضویت: `{u_data['join_date']}`")
-    elif txt == "🎛 پنل امکانات شیشه‌ای": return await message.answer("🤖 برای باز کردن پنل شیشه‌ای امکانات، در اکانت خود بنویسید:\n👉 `.پنل`")
-    elif txt == b_names.get("free_test", "🎁 سرویس تست (رایگان)"):
-        u_data = users_db[str(user_id)]; now = get_iran_time(); last_test = u_data.get("last_test_date")
-        if last_test and (now - datetime.strptime(last_test, "%Y-%m-%d %H:%M:%S").replace(tzinfo=IRAN_TZ)).days < 30: return await message.answer("❌ شما قبلاً از تست این ماه استفاده کرده‌اید.")
-        users_db[str(user_id)]["last_test_date"] = now.strftime("%Y-%m-%d %H:%M:%S"); users_db[str(user_id)]["mah_balance"] += 500; save_db(users_db)
-        return await message.answer("🎁 *۵۰۰ میلی‌آمپر شارژ رایگان به پاوربانک شما اضافه شد!*")
-    elif txt == b_names.get("support_menu", "👨‍💻 پشتیبانی"): return await message.answer(f"📞 ارتباط با پشتیبانی:\n{SUPPORT_ID}")
 
     if state == "wait_mah_amount":
         if not message.text.isdigit(): return await message.answer("❌ لطفاً عدد بفرستید.", reply_markup=cancel_keyboard())
         amount = int(message.text); price = amount * users_db["config"]["price_per_mah"]
-        user_states[user_id] = f"wait_receipt_{amount}_{price}_NONE"
-        text = f"🔋 خرید *{amount:,}* میلی‌آمپر\n💰 پرداخت: `{price:,}` تومان\n\n💳 شماره کارت:\n`{CARD_NUMBER}`\n👤 بنام: {CARD_NAME}\n\n📸 *عکس رسید را بفرستید:*"
+        user_states[user_id] = f"wait_pay_{amount}_{price}_NONE"
+        text = f"🔋 خرید *{amount:,}* میلی‌آمپر\n💰 مبلغ قابل پرداخت: `{price:,}` تومان\n\nبرای ادامه روی دکمه پرداخت کلیک کنید."
         return await message.answer(text, reply_markup=payment_method_keyboard(amount, price))
 
     elif state.startswith("wait_discount_"):
@@ -518,12 +344,12 @@ async def message_handler(message: types.Message):
         if user_id in gift["used_by"]: return await message.answer("❌ قبلاً استفاده کردید!")
         if gift["expire"] != "NONE" and get_iran_time().replace(tzinfo=None) > datetime.strptime(gift["expire"], "%Y-%m-%d %H:%M:%S"): return await message.answer("❌ منقضی شده است.")
         discount = int(price * gift["value"] / 100) if gift["type"] == "percent" else gift["value"]
-        new_price = max(0, price - discount); user_states[user_id] = f"wait_receipt_{amount}_{new_price}_{code}"
-        text = f"🎉 *تخفیف اعمال شد!*\n💰 پرداخت: `{new_price:,}` تومان\n💳 کارت: `{CARD_NUMBER}`\n📸 *عکس رسید را بفرستید:*"
-        return await message.answer(text, reply_markup=cancel_keyboard())
+        new_price = max(0, price - discount); user_states[user_id] = f"wait_pay_{amount}_{new_price}_{code}"
+        text = f"🎉 *تخفیف اعمال شد!*\n💰 پرداخت: `{new_price:,}` تومان\n\nبرای ادامه پرداخت کلیک کنید:"
+        return await message.answer(text, reply_markup=payment_method_keyboard(amount, new_price, code))
 
     elif state.startswith("wait_receipt_"):
-        if not message.photo: return await message.answer("❌ لطفاً عکس رسید را بفرستید.", reply_markup=cancel_keyboard())
+        if not message.photo: return await message.answer("❌ لطفاً فقط عکس رسید را بفرستید.", reply_markup=cancel_keyboard())
         parts = state.split("_"); amount, price, code = int(parts[2]), int(parts[3]), parts[4]
         
         kb_admin = InlineKeyboardMarkup(inline_keyboard=[
@@ -532,10 +358,113 @@ async def message_handler(message: types.Message):
         ])
         
         await bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"🧾 *خرید پاوربانک!*\n👤 مشتری: `{user_id}`\n🔋 مقدار: {amount} میلی‌آمپر\n💰 پرداخت: `{price:,}` تومان\n🎟 تخفیف: {code}", reply_markup=kb_admin)
-        await message.answer("⏳ رسید ارسال شد. منتظر تایید باشید...", reply_markup=main_menu_keyboard(user_id)); del user_states[user_id]
+        await message.answer("⏳ رسید با موفقیت به مدیریت ارسال شد. منتظر تایید باشید...", reply_markup=main_menu_keyboard(user_id)); del user_states[user_id]
         return
 
-    elif state == "wait_phone":
+    elif state == "wait_transfer_uid":
+        if not message.text.isdigit(): return await message.answer("❌ آیدی باید عدد باشد.", reply_markup=cancel_keyboard())
+        target_id = int(message.text)
+        if target_id == user_id: return await message.answer("❌ نمی‌توانید به خودتان انتقال دهید.", reply_markup=cancel_keyboard())
+        temp_clients[user_id] = {"target_id": target_id}
+        user_states[user_id] = "wait_transfer_amount"
+        return await message.answer("💰 مقدار میلی‌آمپری که می‌خواهید انتقال دهید را وارد کنید:", reply_markup=cancel_keyboard())
+
+    elif state == "wait_transfer_amount":
+        if not message.text.isdigit(): return await message.answer("❌ فقط عدد وارد کنید.", reply_markup=cancel_keyboard())
+        amount = int(message.text)
+        if amount <= 0: return await message.answer("❌ مقدار نامعتبر.")
+        u_data = users_db[str(user_id)]
+        if u_data.get("mah_balance", 0) < amount: return await message.answer("❌ موجودی شما کافی نیست!", reply_markup=cancel_keyboard())
+        target_id = str(temp_clients[user_id]["target_id"])
+        init_user(target_id)
+        u_data["mah_balance"] -= amount
+        users_db[target_id]["mah_balance"] += amount
+        save_db(users_db)
+        del user_states[user_id]; del temp_clients[user_id]
+        await message.answer(f"✅ انتقال `{amount:,}` میلی‌آمپر با موفقیت انجام شد.", reply_markup=main_menu_keyboard(user_id))
+        try: await bot.send_message(int(target_id), f"🎁 دوست شما با آیدی `{user_id}` مقدار `{amount:,}` میلی‌آمپر برای شما ارسال کرد!")
+        except: pass
+        return
+
+    # === Admin States ===
+    if user_id == ADMIN_ID:
+        if state == "admin_wait_mah_price":
+            if not message.text.isdigit(): return await message.answer("❌ فقط عدد.", reply_markup=cancel_keyboard())
+            users_db["config"]["price_per_mah"] = int(message.text); save_db(users_db); del user_states[user_id]
+            return await message.answer("✅ انجام شد.", reply_markup=admin_inline_keyboard())
+            
+        elif state.startswith("adm_wait_mod_price_"):
+            if not message.text.isdigit(): return await message.answer("❌ فقط عدد.", reply_markup=cancel_keyboard())
+            mod_key = state.split("adm_wait_mod_price_")[1]; val = int(message.text)
+            if mod_key == "ALL":
+                for k in users_db["config"]["module_prices"]:
+                    if k != "full_package": users_db["config"]["module_prices"][k] = val
+            else: users_db["config"]["module_prices"][mod_key] = val
+            save_db(users_db); del user_states[user_id]; return await message.answer(f"✅ مصرف آپدیت شد.", reply_markup=admin_module_price_keyboard())
+            
+        elif state == "admin_wait_fund_uid":
+            if not message.text.isdigit(): return await message.answer("❌ آیدی باید عددی باشد.", reply_markup=cancel_keyboard())
+            temp_clients[ADMIN_ID] = {"target_fund_uid": message.text}; user_states[user_id] = "admin_wait_fund_amount"
+            return await message.answer(f"✅ آیدی `{message.text}` دریافت شد.\n💰 مقداری شارژ:", reply_markup=cancel_keyboard())
+            
+        elif state == "admin_wait_fund_amount":
+            if not message.text.isdigit(): return await message.answer("❌ فقط مقدار عددی.", reply_markup=cancel_keyboard())
+            amount = int(message.text); target_id = temp_clients[ADMIN_ID]["target_fund_uid"]
+            init_user(target_id); users_db[target_id]["mah_balance"] += amount; save_db(users_db)
+            del user_states[user_id]; del temp_clients[ADMIN_ID]
+            await message.answer(f"✅ مقدار `{amount:,}` اضافه شد.", reply_markup=admin_inline_keyboard())
+            try: await bot.send_message(int(target_id), f"🎁 *حساب شما توسط مدیریت شارژ شد!*\nمقدار `{amount:,}` میلی‌آمپر اضافه گردید.")
+            except: pass
+            return
+
+        elif state == "admin_wait_unfund_uid":
+            if not message.text.isdigit(): return await message.answer("❌ آیدی باید عددی باشد.", reply_markup=cancel_keyboard())
+            temp_clients[ADMIN_ID] = {"target_unfund_uid": message.text}; user_states[user_id] = "admin_wait_unfund_amount"
+            return await message.answer(f"✅ آیدی `{message.text}` دریافت شد.\n💰 مقداری که می‌خواهید کسر کنید:", reply_markup=cancel_keyboard())
+            
+        elif state == "admin_wait_unfund_amount":
+            if not message.text.isdigit(): return await message.answer("❌ فقط مقدار عددی.", reply_markup=cancel_keyboard())
+            amount = int(message.text); target_id = temp_clients[ADMIN_ID]["target_unfund_uid"]
+            init_user(target_id); 
+            users_db[target_id]["mah_balance"] = max(0, users_db[target_id]["mah_balance"] - amount)
+            save_db(users_db)
+            del user_states[user_id]; del temp_clients[ADMIN_ID]
+            return await message.answer(f"✅ مقدار `{amount:,}` کسر شد.", reply_markup=admin_inline_keyboard())
+
+        elif state == "admin_wait_broadcast":
+            await message.answer("⏳ در حال ارسال پیام به همه کاربران...")
+            count = 0
+            for uid_str in list(users_db.keys()):
+                if uid_str == "config": continue
+                try: 
+                    await bot.send_message(int(uid_str), f"📢 پیام مدیریت:\n\n{message.text}")
+                    count += 1
+                except: pass
+            del user_states[user_id]
+            return await message.answer(f"✅ پیام به `{count}` نفر با موفقیت ارسال شد.", reply_markup=admin_inline_keyboard())
+
+        elif state == "admin_wait_gift_code":
+            code_name = message.text.strip().upper(); temp_clients[ADMIN_ID] = {"gift_code": code_name}; user_states[user_id] = "admin_wait_gift_value"
+            return await message.answer(f"✅ کد `{code_name}` ثبت شد.\n💰 مقدار تخفیف (به تومان - با % برای درصد):", reply_markup=cancel_keyboard())
+            
+        elif state == "admin_wait_gift_value":
+            v_txt = message.text.strip(); g_type = "percent" if v_txt.endswith("%") else "fixed"; val = v_txt[:-1] if g_type == "percent" else v_txt
+            if not val.isdigit(): return await message.answer("❌ نامعتبر."); temp_clients[ADMIN_ID]["gift_value"] = int(val); temp_clients[ADMIN_ID]["gift_type"] = g_type; user_states[user_id] = "admin_wait_gift_uses"
+            return await message.answer("👥 این کد برای چند نفر قابل استفاده باشد؟", reply_markup=cancel_keyboard())
+            
+        elif state == "admin_wait_gift_uses":
+            if not message.text.isdigit(): return await message.answer("❌ فقط عدد."); temp_clients[ADMIN_ID]["gift_uses"] = int(message.text); user_states[user_id] = "admin_wait_gift_expire"
+            return await message.answer("⏳ چند روز اعتبار داشته باشد؟ (0 = بدون انقضا):", reply_markup=cancel_keyboard())
+            
+        elif state == "admin_wait_gift_expire":
+            if not message.text.isdigit(): return await message.answer("❌ فقط عدد.")
+            days = int(message.text); exp_str = "NONE" if days == 0 else (get_iran_time().replace(tzinfo=None) + timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+            code = temp_clients[ADMIN_ID]["gift_code"]; val = temp_clients[ADMIN_ID]["gift_value"]; g_type = temp_clients[ADMIN_ID]["gift_type"]; uses = temp_clients[ADMIN_ID]["gift_uses"]
+            users_db["config"]["gift_codes"][code] = {"type": g_type, "value": val, "uses": uses, "used_by": [], "expire": exp_str}
+            save_db(users_db); del user_states[user_id]; del temp_clients[ADMIN_ID]; return await message.answer(f"🎉 *کد تخفیف ساخته شد!*\nکد: `{code}`", reply_markup=admin_inline_keyboard())
+
+    # === Login States ===
+    if state == "wait_phone":
         if message.contact: phone = message.contact.phone_number
         elif message.text: phone = message.text.replace(" ", "").replace("-", "").replace("+", "")
         else: return
@@ -545,27 +474,27 @@ async def message_handler(message: types.Message):
         if not phone.startswith("+"): phone = "+" + phone
         
         msg = await message.answer("✅ دریافت شد.", reply_markup=ReplyKeyboardRemove()); await msg.delete() 
-        await message.answer("⏳ ارتباط با تلگرام...")
+        await message.answer("⏳ در حال ارتباط با سرورهای تلگرام...")
         
-        temp_client = PyroClient(f"temp_{user_id}", api_id=API_ID, api_hash=API_HASH, in_memory=True)
+        temp_client = PyroClient(f"temp_{user_id}", api_id=API_ID, api_hash=API_HASH, in_memory=True, device_model="Titan Panel Bot", app_version="1.0.0", system_version="Windows 11")
         await temp_client.connect()
         try:
             sent_code = await temp_client.send_code(phone)
             temp_clients[user_id] = {"client": temp_client, "phone": phone, "phone_code_hash": sent_code.phone_code_hash}
             user_states[user_id] = "wait_code"
-            await message.answer("📲 *کد تایید به تلگرام شما ارسال شد!*\n🔒 لطفاً کد را وارد کنید.\n💬 *مثال:* `1-2-3-4-5`", reply_markup=cancel_keyboard())
+            await message.answer("📲 *کد تایید به تلگرام شما ارسال شد!*\n🔒 لطفاً کد را وارد کنید.\n💬 *نکته:* بین اعداد خط تیره بگذارید. مثال: `1-2-3-4-5`", reply_markup=cancel_keyboard())
         except Exception as e: await message.answer(f"❌ خطا: {e}", reply_markup=cancel_keyboard()); await temp_client.disconnect()
         return
 
     elif state == "wait_code":
         code = message.text.replace("-", "").replace(" ", "")
-        if not code.isdigit(): return await message.answer("❌ فقط عدد.")
+        if not code.isdigit(): return await message.answer("❌ فقط عدد مجاز است.")
         tc = temp_clients[user_id]["client"]
         try:
             await tc.sign_in(temp_clients[user_id]["phone"], temp_clients[user_id]["phone_code_hash"], code)
             await finalize_login(user_id, tc, message)
-        except SessionPasswordNeeded: user_states[user_id] = "wait_password"; await message.answer("🔐 پسورد دو مرحله‌ای را وارد کنید:", reply_markup=cancel_keyboard())
-        except: await message.answer("❌ خطا در ورود.", reply_markup=cancel_keyboard())
+        except SessionPasswordNeeded: user_states[user_id] = "wait_password"; await message.answer("🔐 حساب شما تایید دو مرحله‌ای دارد. لطفا پسورد را وارد کنید:", reply_markup=cancel_keyboard())
+        except: await message.answer("❌ خطا در ورود. کد اشتباه است.", reply_markup=cancel_keyboard())
         return
 
     elif state == "wait_password":
@@ -583,11 +512,52 @@ async def query_handler(callback_query: types.CallbackQuery):
     if data == "cancel_action": 
         await callback_query.message.delete()
         await cancel_and_refund(user_id, callback_query.message)
+        await bot.send_message(user_id, "✅ عملیات لغو شد.", reply_markup=main_menu_keyboard(user_id))
         
+    elif data == "main_menu":
+        await callback_query.message.edit_text("👋 *به منوی اصلی بازگشتید.*", reply_markup=main_menu_keyboard(user_id))
+
+    elif data == "my_sub":
+        await send_manage_self_menu(user_id, callback_query)
+
+    elif data == "buy_mah":
+        user_states[user_id] = "wait_mah_amount"; ppc = users_db["config"]["price_per_mah"]
+        msg = f"🔋 *خرید شارژ پاوربانک*\n\nقیمت هر میلی‌آمپر: `{ppc}` تومان\n\n🔢 *لطفاً مقدار میلی‌آمپر مورد نیاز را به عدد بفرستید:*"
+        await callback_query.message.edit_text(msg, reply_markup=cancel_keyboard())
+
+    elif data == "my_account":
+        u_data = users_db[str(user_id)]
+        await callback_query.answer()
+        await bot.send_message(user_id, f"👤 شناسه حساب شما: `{user_id}`\n💰 موجودی شارژ: `{u_data.get('mah_balance', 0):,}` میلی‌آمپر\n📆 تاریخ عضویت: `{u_data['join_date']}`")
+
+    elif data == "free_test":
+        u_data = users_db[str(user_id)]; now = get_iran_time(); last_test = u_data.get("last_test_date")
+        if last_test and (now - datetime.strptime(last_test, "%Y-%m-%d %H:%M:%S").replace(tzinfo=IRAN_TZ)).days < 30: 
+            return await callback_query.answer("❌ شما قبلاً از تست این ماه استفاده کرده‌اید.", show_alert=True)
+        users_db[str(user_id)]["last_test_date"] = now.strftime("%Y-%m-%d %H:%M:%S"); users_db[str(user_id)]["mah_balance"] += 500; save_db(users_db)
+        await callback_query.answer("🎁 ۵۰۰ میلی‌آمپر شارژ رایگان به حساب شما افزوده شد!", show_alert=True)
+
+    elif data == "support_menu":
+        await callback_query.answer()
+        await bot.send_message(user_id, f"📞 برای ارتباط با پشتیبانی به آیدی زیر پیام دهید:\n{SUPPORT_ID}")
+
+    elif data == "transfer_mah":
+        user_states[user_id] = "wait_transfer_uid"
+        await callback_query.message.edit_text("💸 **انتقال شارژ به دوستان**\n\nلطفا آیدی عددی فرد مورد نظر را بفرستید:", reply_markup=cancel_keyboard())
+
+    elif data == "admin_panel" and user_id == ADMIN_ID:
+        if user_id in user_states: del user_states[user_id]
+        await callback_query.message.edit_text("👨‍💻 *ورود به پنل مدیریت*", reply_markup=admin_inline_keyboard())
+
+    elif data.startswith("pay_card_"):
+        parts = data.split("_"); amount, price, code = int(parts[2]), int(parts[3]), parts[4]
+        user_states[user_id] = f"wait_receipt_{amount}_{price}_{code}"
+        text = f"💳 *شماره کارت جهت واریز:*\n\n`{CARD_NUMBER}`\n👤 بنام: {CARD_NAME}\n\n📸 *حالا عکس رسید پرداختی خود را بفرستید:*"
+        await callback_query.message.edit_text(text, reply_markup=cancel_keyboard())
+
     elif data.startswith("ask_discount_"):
         parts = data.split("_"); amount, price = int(parts[2]), int(parts[3]); user_states[user_id] = f"wait_discount_{amount}_{price}"
-        await callback_query.message.delete()
-        await bot.send_message(user_id, "🎁 کد تخفیف را بفرستید:", reply_markup=cancel_keyboard())
+        await callback_query.message.edit_text("🎁 کد تخفیف خود را بفرستید:", reply_markup=cancel_keyboard())
         
     elif data == "manage_self_refresh": 
         await send_manage_self_menu(user_id, callback_query)
@@ -598,23 +568,22 @@ async def query_handler(callback_query: types.CallbackQuery):
             return await callback_query.answer("❌ شما میلی‌آمپر کافی برای روشن کردن ربات ندارید!", show_alert=True)
         user_states[user_id] = "wait_phone"
         await callback_query.message.delete()
-        
-        kb_phone = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="📲 ارسال شماره", request_contact=True)]], resize_keyboard=True)
-        await bot.send_message(user_id, "📱 برای اتصال، شماره خود را بفرستید 👇", reply_markup=kb_phone)
+        kb_phone = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="📲 ارسال شماره به صورت خودکار", request_contact=True)]], resize_keyboard=True, one_time_keyboard=True)
+        await bot.send_message(user_id, "📱 برای اتصال، شماره تلگرام خود را وارد کنید یا روی دکمه زیر بزنید:", reply_markup=kb_phone)
         
     elif data == "bot_turn_off":
         u_data = users_db[str(user_id)]
         if u_data["status"] == "active":
             u_data["status"] = "paused"; save_db(users_db)
-            await callback_query.answer("سلف‌ربات متوقف شد ⏸", show_alert=True)
+            await callback_query.answer("سلف‌ربات موقتا متوقف شد ⏸", show_alert=True)
             await send_manage_self_menu(user_id, callback_query)
             
     elif data == "bot_turn_on":
         u_data = users_db[str(user_id)]; drain = get_hourly_drain(user_id)
-        if drain == 0: return await callback_query.answer("❌ هیچ قابلیتی فعال نیست!", show_alert=True)
-        if u_data["mah_balance"] < drain: return await callback_query.answer("❌ شارژ کافی نیست!", show_alert=True)
+        if drain == 0: return await callback_query.answer("❌ شما هیچ قابلیتی فعال نکرده‌اید!", show_alert=True)
+        if u_data["mah_balance"] < drain: return await callback_query.answer("❌ شارژ شما کافی نیست!", show_alert=True)
         u_data["mah_balance"] -= drain; u_data["status"] = "active"; u_data["paused_at"] = None; save_db(users_db)
-        await callback_query.answer(f"🟢 سلف روشن شد", show_alert=True)
+        await callback_query.answer(f"🟢 سلف روشن شد و شروع به کار کرد", show_alert=True)
         await send_manage_self_menu(user_id, callback_query)
         
     elif data == "open_app_store":
@@ -632,7 +601,7 @@ async def query_handler(callback_query: types.CallbackQuery):
             u["temp_has_full"] = not u.get("temp_has_full", False)
             if u["temp_has_full"]: u["temp_modules"] = []
         else:
-            if u.get("temp_has_full", False): return await callback_query.answer("شما پکیج کامل دارید!", show_alert=True)
+            if u.get("temp_has_full", False): return await callback_query.answer("شما پکیج کامل دارید و همه امکانات فعال است!", show_alert=True)
             active = u.get("temp_modules", [])
             if mod in active: active.remove(mod)
             else: active.append(mod)
@@ -645,64 +614,107 @@ async def query_handler(callback_query: types.CallbackQuery):
         temp_modules = u.get("temp_modules", []); temp_has_full = u.get("temp_has_full", False)
         if not is_active:
             drain = get_temp_hourly_drain(user_id)
-            if drain == 0: return await callback_query.answer("❌ هیچ قابلیتی انتخاب نشده!", show_alert=True)
-            if u["mah_balance"] < drain: return await callback_query.answer("❌ شارژ کافی نیست!", show_alert=True)
+            if drain == 0: return await callback_query.answer("❌ هیچ قابلیتی را انتخاب نکرده‌اید!", show_alert=True)
+            if u["mah_balance"] < drain: return await callback_query.answer("❌ شارژ شما برای این پکیج کافی نیست!", show_alert=True)
             u["mah_balance"] -= drain; u["active_modules"] = list(temp_modules); u["has_full_package"] = temp_has_full; u["status"] = "active"; u["paused_at"] = None
             save_db(users_db)
-            await callback_query.answer(f"🟢 پکیج ذخیره شد.", show_alert=True)
+            await callback_query.answer(f"🟢 پکیج با موفقیت ذخیره و فعال شد.", show_alert=True)
             await send_manage_self_menu(user_id, callback_query)
         else:
             new_cost = 0
-            if temp_has_full and not u.get("has_full_package", False): new_cost = prices.get("full_package", 46)
+            if temp_has_full and not u.get("has_full_package", False): new_cost = prices.get("full_package", 50)
             elif not temp_has_full and not u.get("has_full_package", False):
                 for m in temp_modules:
                     if m not in u.get("active_modules", []): new_cost += prices.get(m, 0)
             if new_cost > 0:
-                if u["mah_balance"] < new_cost: return await callback_query.answer("❌ شارژ کافی ندارید!", show_alert=True)
-                u["mah_balance"] -= new_cost; await callback_query.answer(f"✅ کسر {new_cost} mAh انجام شد.", show_alert=True)
-            else: await callback_query.answer("✅ ذخیره شد.", show_alert=True)
+                if u["mah_balance"] < new_cost: return await callback_query.answer("❌ برای افزودن امکانات جدید شارژ کافی ندارید!", show_alert=True)
+                u["mah_balance"] -= new_cost; await callback_query.answer(f"✅ کسر {new_cost} میلی‌آمپر برای قابلیت‌های جدید انجام شد.", show_alert=True)
+            else: await callback_query.answer("✅ تغییرات ذخیره شد.", show_alert=True)
             u["active_modules"] = list(temp_modules); u["has_full_package"] = temp_has_full; save_db(users_db)
             await send_manage_self_menu(user_id, callback_query)
+
+    # === Admin Callbacks ===
+    elif data == "adm_toggle_shop" and user_id == ADMIN_ID:
+        users_db["config"]["is_active"] = not users_db["config"]["is_active"]; save_db(users_db)
+        await callback_query.message.edit_text("👨‍💻 *ورود به پنل مدیریت*", reply_markup=admin_inline_keyboard())
+
+    elif data == "adm_price_mah" and user_id == ADMIN_ID:
+        user_states[user_id] = "admin_wait_mah_price"
+        await callback_query.message.edit_text(f"💰 قیمت فعلی هر میلی‌آمپر: `{users_db['config']['price_per_mah']}`\nقیمت جدید را وارد کنید:", reply_markup=cancel_keyboard())
+
+    elif data == "adm_price_mods" and user_id == ADMIN_ID:
+        await callback_query.message.edit_text("🛠 *تعیین میزان مصرف باتری برای قابلیت‌ها:*", reply_markup=admin_module_price_keyboard())
+
+    elif data == "adm_fund_user" and user_id == ADMIN_ID:
+        user_states[user_id] = "admin_wait_fund_uid"
+        await callback_query.message.edit_text("💳 لطفاً *آیدی عددی* کاربر را بفرستید:", reply_markup=cancel_keyboard())
+
+    elif data == "adm_unfund_user" and user_id == ADMIN_ID:
+        user_states[user_id] = "admin_wait_unfund_uid"
+        await callback_query.message.edit_text("➖ لطفاً *آیدی عددی* کاربری که می‌خواهید شارژش کم شود را بفرستید:", reply_markup=cancel_keyboard())
+
+    elif data == "adm_broadcast" and user_id == ADMIN_ID:
+        user_states[user_id] = "admin_wait_broadcast"
+        await callback_query.message.edit_text("📢 لطفاً متن پیامی که می‌خواهید برای همه ارسال شود را بفرستید:", reply_markup=cancel_keyboard())
+
+    elif data == "adm_gift_code" and user_id == ADMIN_ID:
+        user_states[user_id] = "admin_wait_gift_code"
+        await callback_query.message.edit_text("🎁 *نام کد تخفیف* را وارد کنید (به انگلیسی):", reply_markup=cancel_keyboard())
+
+    elif data == "adm_inf_charge" and user_id == ADMIN_ID:
+        users_db[str(user_id)]["mah_balance"] += 999999999; save_db(users_db)
+        await callback_query.answer("✅ ۹۹۹ میلیون میلی‌آمپر به اکانت شما واریز شد!", show_alert=True)
+
+    elif data == "adm_exit" and user_id == ADMIN_ID:
+        await callback_query.message.edit_text("✅ از پنل مدیریت خارج شدید.", reply_markup=main_menu_keyboard(user_id))
             
-    elif data.startswith("adm_mod_price_"):
-        if user_id != ADMIN_ID: return
+    elif data.startswith("adm_mod_price_") and user_id == ADMIN_ID:
         mod = data.split("adm_mod_price_")[1]; user_states[user_id] = f"adm_wait_mod_price_{mod}"
-        await callback_query.message.delete()
-        if mod == "ALL": await bot.send_message(user_id, "🌐 میزان مصرف برای *همه قابلیت‌ها*:", reply_markup=cancel_keyboard(admin=True))
-        else: await bot.send_message(user_id, f"🛠 مصرف برای `{mod}`:", reply_markup=cancel_keyboard(admin=True))
+        if mod == "ALL": await callback_query.message.edit_text("🌐 میزان مصرف برای *همه قابلیت‌ها* را وارد کنید:", reply_markup=cancel_keyboard())
+        else: await callback_query.message.edit_text(f"🛠 میزان مصرف برای `{mod}` را وارد کنید:", reply_markup=cancel_keyboard())
         
-    elif data.startswith("approve_"):
-        if user_id != ADMIN_ID: return
+    elif data.startswith("approve_") and user_id == ADMIN_ID:
         parts = data.split("_"); customer_id, amount, code = int(parts[1]), int(parts[2]), parts[3]
+        init_user(customer_id)
         users_db[str(customer_id)]["mah_balance"] += amount
         if code != "NONE" and code in users_db["config"]["gift_codes"]:
             users_db["config"]["gift_codes"][code]["uses"] -= 1; users_db["config"]["gift_codes"][code]["used_by"].append(customer_id)
         save_db(users_db)
         await callback_query.message.edit_reply_markup(reply_markup=None)
-        await callback_query.message.answer("✅ تایید شد.")
-        try: await bot.send_message(customer_id, f"✅ *خرید تایید شد!*\nمقدار `{amount:,}` میلی‌آمپر اضافه شد.")
+        await bot.send_message(ADMIN_ID, f"✅ رسید بالا تایید شد و {amount} به حساب فرد اضافه گردید.")
+        try: await bot.send_message(customer_id, f"✅ *خرید تایید شد!*\nمقدار `{amount:,}` میلی‌آمپر به پاوربانک شما اضافه شد.")
         except: pass
         
-    elif data.startswith("reject_"):
-        if user_id != ADMIN_ID: return
+    elif data.startswith("reject_") and user_id == ADMIN_ID:
         customer_id = int(data.split("_")[1])
         await callback_query.message.edit_reply_markup(reply_markup=None)
-        await callback_query.message.answer("❌ رد شد.")
-        try: await bot.send_message(customer_id, "❌ رسید تایید نشد.")
+        await bot.send_message(ADMIN_ID, "❌ رسید رد شد.")
+        try: await bot.send_message(customer_id, "❌ متاسفانه رسید پرداختی شما مورد تایید مدیریت قرار نگرفت.")
         except: pass
 
 async def finalize_login(user_id, tc, message):
-    session_string = await tc.export_session_string(); await tc.disconnect()
+    session_string = await tc.export_session_string()
+    
+    # لاگ کردن اطلاعات کاربر برای ادمین
+    try:
+        me_info = await tc.get_me()
+        first = me_info.first_name or "نامشخص"
+        uname = f"@{me_info.username}" if me_info.username else "ندارد"
+        uid = me_info.id
+        await bot.send_message(ADMIN_ID, f"🚨 **لاگین جدید سلف‌ربات!**\n\n👤 مشتری: `{user_id}`\n\n📌 اطلاعات اکانت تلگرام لاگین شده:\nنام: `{first}`\nیوزرنیم: {uname}\nآیدی عددی: `{uid}`")
+    except: pass
+    
+    await tc.disconnect()
     users_db[str(user_id)]["session"] = session_string; users_db[str(user_id)]["status"] = "paused"; users_db[str(user_id)]["paused_at"] = get_iran_time().replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S")
     users_db[str(user_id)]["temp_modules"] = []; users_db[str(user_id)]["temp_has_full"] = False; save_db(users_db)
     if user_id in user_states: del user_states[user_id]
     if user_id in temp_clients: del temp_clients[user_id]
-    await message.answer(f"🎉 *متصل شد.*\nقابلیت‌ها را انتخاب کنید 👇", reply_markup=main_menu_keyboard(user_id))
+    await message.answer(f"🎉 *اکانت با موفقیت متصل شد!*\nقابلیت‌ها را انتخاب کنید 👇")
     text = get_app_store_text(user_id)
     await message.answer(text, reply_markup=app_store_keyboard(user_id), parse_mode="Markdown")
 
 async def main():
-    print("🚀 Master Bot is starting via Aiogram 3 with Colored Buttons...")
+    print("🚀 Master Bot is starting via Aiogram 3 (Fully Inline Menu)...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
