@@ -25,8 +25,10 @@ DB_FILE = "database.json"
 def load_db():
     if os.path.exists(DB_FILE):
         try:
-            with open(DB_FILE, "r", encoding="utf-8") as f: return json.load(f)
-        except: return {}
+            with open(DB_FILE, "r", encoding="utf-8") as f: 
+                return json.load(f)
+        except: 
+            return {}
     return {}
 
 def get_entry_keyboard(owner_id):
@@ -42,36 +44,60 @@ def get_entry_keyboard(owner_id):
 
 def get_categories_keyboard(user_id):
     db = load_db()
-    # شبیه‌سازی دقیق و اختصاصی طبق عکس ۱ ارسالی شما (لایوت رنگی اختصاصی)
-    active = db.get(str(user_id), {}).get("active_modules", [])
-    has_full = db.get(str(user_id), {}).get("has_full_package", False)
-    
-    def btn(key, text, style):
-        is_locked = False if (key in ["p_ping", "p_info"] or has_full or key in active) else True
-        return InlineKeyboardButton(text=f"🔒 {text}" if is_locked else text, callback_data=f"{key}|{user_id}", style=ButtonStyle.SECONDARY if is_locked else style)
+    try:
+        layout = db["config"]["panel_config"]["layout"]
+        names = db["config"]["panel_config"]["names"]
+        user_data = db.get(str(user_id), {})
+        active_modules = user_data.get("active_modules", [])
+        has_full_package = user_data.get("has_full_package", False)
+        free_modules = ["p_ping", "p_info"] 
         
-    kb = [
-        [btn("p_guard", "نگهبان چت", ButtonStyle.PRIMARY), btn("p_clock", "ساعت", ButtonStyle.PRIMARY), btn("p_textmode", "حالت متن", ButtonStyle.PRIMARY)],
-        [btn("p_action", "اکشن", ButtonStyle.PRIMARY), btn("p_locks", "قفل‌ها", ButtonStyle.PRIMARY), btn("p_logo", "لوگو", ButtonStyle.PRIMARY), btn("p_ping", "پینگ", ButtonStyle.PRIMARY)],
-        [btn("p_filter", "فیلترکلمات", ButtonStyle.SUCCESS), btn("p_monshi", "منشی", ButtonStyle.SUCCESS), btn("p_v2ray", "دوست و دشمن", ButtonStyle.SUCCESS)],
-        [btn("p_forcejoin", "عضویت اجباری پیوی", ButtonStyle.SUCCESS), btn("p_autoreply", "پاسخ خودکار", ButtonStyle.SUCCESS)],
-        [btn("p_spam", "اسپم", ButtonStyle.PRIMARY), btn("p_react", "ریکت", ButtonStyle.PRIMARY), btn("p_dl", "دانلودر", ButtonStyle.PRIMARY)],
-        [btn("p_purge", "حذف", ButtonStyle.PRIMARY), btn("p_locks", "بلاک", ButtonStyle.PRIMARY), btn("p_tag", "تگ", ButtonStyle.PRIMARY), btn("p_info", "اطلاعات", ButtonStyle.PRIMARY), btn("p_mute", "سکوت", ButtonStyle.PRIMARY)],
-        [btn("p_ai", "هوش مصنوعی", ButtonStyle.SUCCESS), btn("p_readall", "سین خودکار", ButtonStyle.SUCCESS)],
-        [btn("calc_main", "✖️ ➗", ButtonStyle.SUCCESS), btn("p_cheat", "تقلب", ButtonStyle.SUCCESS), btn("p_anim", "انیمیشن", ButtonStyle.SUCCESS), btn("p_translate", "ترجمه", ButtonStyle.SUCCESS)],
-        [btn("p_tts", "تبدیل متن به ویس", ButtonStyle.PRIMARY), btn("p_music", "سرچ ویس آماده", ButtonStyle.PRIMARY)],
-        [btn("p_profile", "فضول پروفایل", ButtonStyle.PRIMARY), btn("p_tabchi", "تبچی", ButtonStyle.PRIMARY), btn("p_music", "سرچ آهنگ", ButtonStyle.PRIMARY)],
-        [btn("p_qr", "اسکرین", ButtonStyle.DANGER), btn("p_crypto", "قیمت ارز", ButtonStyle.DANGER), btn("p_comment", "کامنت اول", ButtonStyle.DANGER)],
-        [InlineKeyboardButton(text="« بازگشت", callback_data=f"back|{user_id}", style=ButtonStyle.DANGER)]
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=kb)
+        # خلاقیت در رنگ‌بندی: اختصاص رنگ‌های هوشمندانه به هر ماژول بر اساس کاربرد
+        color_map = {
+            "p_guard": ButtonStyle.SUCCESS, "p_clock": ButtonStyle.PRIMARY, "p_textmode": ButtonStyle.PRIMARY,
+            "p_ping": ButtonStyle.PRIMARY, "p_logo": ButtonStyle.PRIMARY, "p_locks": ButtonStyle.DANGER, "p_action": ButtonStyle.PRIMARY,
+            "p_monshi": ButtonStyle.SUCCESS, "p_filter": ButtonStyle.SUCCESS, "p_v2ray": ButtonStyle.SUCCESS,
+            "p_autoreply": ButtonStyle.SUCCESS, "p_forcejoin": ButtonStyle.SUCCESS, "p_readall": ButtonStyle.SUCCESS,
+            "p_dl": ButtonStyle.PRIMARY, "p_react": ButtonStyle.PRIMARY, "p_spam": ButtonStyle.DANGER,
+            "p_mute": ButtonStyle.DANGER, "p_info": ButtonStyle.PRIMARY, "p_tag": ButtonStyle.PRIMARY, "p_purge": ButtonStyle.DANGER,
+            "p_ai": ButtonStyle.SUCCESS, "p_qr": ButtonStyle.PRIMARY, "p_profile": ButtonStyle.PRIMARY,
+            "p_translate": ButtonStyle.SUCCESS, "p_anim": ButtonStyle.SUCCESS, "p_cheat": ButtonStyle.DANGER,
+            "p_tts": ButtonStyle.PRIMARY, "p_music": ButtonStyle.PRIMARY, "p_tabchi": ButtonStyle.SUCCESS,
+            "p_comment": ButtonStyle.PRIMARY, "p_crypto": ButtonStyle.PRIMARY
+        }
+        
+        kb = []
+        for row in layout:
+            kb_row = []
+            for btn_key in row:
+                btn_name = names.get(btn_key, btn_key)
+                is_locked = False
+                
+                if btn_key not in free_modules and not has_full_package and btn_key not in active_modules: 
+                    btn_name = f"🔒 {btn_name}"
+                    is_locked = True
+                
+                btn_style = ButtonStyle.SECONDARY if is_locked else color_map.get(btn_key, ButtonStyle.PRIMARY)
+                kb_row.append(InlineKeyboardButton(text=btn_name, callback_data=f"{btn_key}|{user_id}", style=btn_style))
+                
+            kb.append(kb_row)
+            
+        # دکمه‌های پایانی پنل (ماشین حساب و بازگشت)
+        kb.append([
+            InlineKeyboardButton(text="🧮 ماشین حساب", callback_data=f"calc_main|{user_id}", style=ButtonStyle.SUCCESS),
+            InlineKeyboardButton(text="📞 پشتیبانی", url="https://t.me/Im_Iliiya", style=ButtonStyle.PRIMARY)
+        ])
+        kb.append([InlineKeyboardButton(text="🔙 بازگشت به صفحه اصلی", callback_data=f"back|{user_id}", style=ButtonStyle.DANGER)])
+        return InlineKeyboardMarkup(inline_keyboard=kb)
+    except Exception: 
+        return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="❌ خطا در خواندن اطلاعات", callback_data=f"close|{user_id}", style=ButtonStyle.DANGER)]])
 
 def get_back_button(owner_id):
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔙 بازگشت", callback_data=f"enter|{owner_id}", style=ButtonStyle.PRIMARY)]
     ])
 
-def get_calculator_keyboard(owner_id, expression=""):
+def get_calculator_keyboard(owner_id):
     keys = [
         ["7", "8", "9", "/"],
         ["4", "5", "6", "*"],
@@ -83,8 +109,8 @@ def get_calculator_keyboard(owner_id, expression=""):
         r_btns = []
         for k in row:
             if k == "C": style = ButtonStyle.DANGER
-            elif k in ["=", "+", "-", "*", "/"]: style = ButtonStyle.PRIMARY
-            else: style = ButtonStyle.SECONDARY
+            elif k in ["=", "+", "-", "*", "/"]: style = ButtonStyle.SUCCESS
+            else: style = ButtonStyle.PRIMARY
             r_btns.append(InlineKeyboardButton(text=k, callback_data=f"calc_act|{owner_id}|{k}", style=style))
         kb.append(r_btns)
     kb.append([InlineKeyboardButton(text="🔙 بازگشت به پنل", callback_data=f"enter|{owner_id}", style=ButtonStyle.DANGER)])
@@ -149,7 +175,7 @@ async def helper_callback_handler(callback_query: CallbackQuery):
     action = parts[0]
     owner_id = int(parts[1]) if len(parts) > 1 else clicker_id
     
-    # سیستم قفل پنل برای دیگران
+    # سیستم قفل پنل برای فرد بازکننده
     if clicker_id != owner_id:
         return await callback_query.answer("⚠️ این پنل برای شما نیست! (فقط احضارکننده دسترسی دارد)", show_alert=True)
     
@@ -159,7 +185,7 @@ async def helper_callback_handler(callback_query: CallbackQuery):
         elif action == "enter": 
             await bot.edit_message_text(inline_message_id=callback_query.inline_message_id, text="🗂 <b>لیست امکانات سلف‌ربات</b>", reply_markup=get_categories_keyboard(owner_id), parse_mode=ParseMode.HTML)
         elif action == "back": 
-            await bot.edit_message_text(inline_message_id=callback_query.inline_message_id, text="🤖 <b>داشبورد مدیریت سوپر سلف‌ربات VIP</b> 🤖", reply_markup=get_entry_keyboard(owner_id), parse_mode=ParseMode.HTML)
+            await bot.edit_message_text(inline_message_id=callback_query.inline_message_id, text="🤖 <b>داشبورد مدیریت سوپر سلف‌ربات VIP</b> 🤖\n\nبرای دسترسی به امکانات، روی دکمه زیر کلیک کنید 👇", reply_markup=get_entry_keyboard(owner_id), parse_mode=ParseMode.HTML)
         
         elif action == "calc_main":
             calc_sessions[owner_id] = ""
@@ -185,7 +211,7 @@ async def helper_callback_handler(callback_query: CallbackQuery):
     await callback_query.answer()
 
 async def main():
-    print("🚀 Panel Bot is starting (Aiogram 3 Colored - Owner Lock - Calc Added)...")
+    print("🚀 Panel Bot is starting (Original Layout + Colored + Calculator)...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
