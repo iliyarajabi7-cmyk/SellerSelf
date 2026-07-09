@@ -52,23 +52,20 @@ def get_categories_keyboard(user_id):
         has_full_package = user_data.get("has_full_package", False)
         free_modules = ["p_ping", "p_info"] 
         
-        # خلاقیت در رنگ‌بندی: اختصاص رنگ‌های هوشمندانه به هر ماژول بر اساس کاربرد
-        color_map = {
-            "p_guard": ButtonStyle.SUCCESS, "p_clock": ButtonStyle.PRIMARY, "p_textmode": ButtonStyle.PRIMARY,
-            "p_ping": ButtonStyle.PRIMARY, "p_logo": ButtonStyle.PRIMARY, "p_locks": ButtonStyle.DANGER, "p_action": ButtonStyle.PRIMARY,
-            "p_monshi": ButtonStyle.SUCCESS, "p_filter": ButtonStyle.SUCCESS, "p_v2ray": ButtonStyle.SUCCESS,
-            "p_autoreply": ButtonStyle.SUCCESS, "p_forcejoin": ButtonStyle.SUCCESS, "p_readall": ButtonStyle.SUCCESS,
-            "p_dl": ButtonStyle.PRIMARY, "p_react": ButtonStyle.PRIMARY, "p_spam": ButtonStyle.DANGER,
-            "p_mute": ButtonStyle.DANGER, "p_info": ButtonStyle.PRIMARY, "p_tag": ButtonStyle.PRIMARY, "p_purge": ButtonStyle.DANGER,
-            "p_ai": ButtonStyle.SUCCESS, "p_qr": ButtonStyle.PRIMARY, "p_profile": ButtonStyle.PRIMARY,
-            "p_translate": ButtonStyle.SUCCESS, "p_anim": ButtonStyle.SUCCESS, "p_cheat": ButtonStyle.DANGER,
-            "p_tts": ButtonStyle.PRIMARY, "p_music": ButtonStyle.PRIMARY, "p_tabchi": ButtonStyle.SUCCESS,
-            "p_comment": ButtonStyle.PRIMARY, "p_crypto": ButtonStyle.PRIMARY
-        }
-        
         kb = []
-        for row in layout:
+        for row_idx, row in enumerate(layout):
             kb_row = []
+            
+            # تنظیم رنگ‌ها بر اساس شماره ردیف طبق درخواست شما
+            if row_idx in [0, 1, 2]:
+                row_color = ButtonStyle.SUCCESS
+            elif row_idx in [3, 4, 5]:
+                row_color = ButtonStyle.PRIMARY
+            elif row_idx in [6, 7, 8]:
+                row_color = ButtonStyle.SUCCESS
+            else:
+                row_color = ButtonStyle.DANGER
+
             for btn_key in row:
                 btn_name = names.get(btn_key, btn_key)
                 is_locked = False
@@ -77,17 +74,20 @@ def get_categories_keyboard(user_id):
                     btn_name = f"🔒 {btn_name}"
                     is_locked = True
                 
-                btn_style = ButtonStyle.SECONDARY if is_locked else color_map.get(btn_key, ButtonStyle.PRIMARY)
+                btn_style = ButtonStyle.SECONDARY if is_locked else row_color
                 kb_row.append(InlineKeyboardButton(text=btn_name, callback_data=f"{btn_key}|{user_id}", style=btn_style))
                 
             kb.append(kb_row)
             
-        # دکمه‌های پایانی پنل (ماشین حساب و بازگشت)
+        # دکمه ماشین حساب (ردیف یکی مانده به آخر) رنگ قرمز
         kb.append([
-            InlineKeyboardButton(text="🧮 ماشین حساب", callback_data=f"calc_main|{user_id}", style=ButtonStyle.SUCCESS),
-            InlineKeyboardButton(text="📞 پشتیبانی", url="https://t.me/Im_Iliiya", style=ButtonStyle.PRIMARY)
+            InlineKeyboardButton(text="🧮 ماشین حساب", callback_data=f"calc_main|{user_id}", style=ButtonStyle.DANGER)
         ])
-        kb.append([InlineKeyboardButton(text="🔙 بازگشت به صفحه اصلی", callback_data=f"back|{user_id}", style=ButtonStyle.DANGER)])
+        
+        # دکمه بازگشت (ردیف آخر) رنگ قرمز
+        kb.append([
+            InlineKeyboardButton(text="🔙 بازگشت به صفحه اصلی", callback_data=f"back|{user_id}", style=ButtonStyle.DANGER)
+        ])
         return InlineKeyboardMarkup(inline_keyboard=kb)
     except Exception: 
         return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="❌ خطا در خواندن اطلاعات", callback_data=f"close|{user_id}", style=ButtonStyle.DANGER)]])
@@ -211,7 +211,7 @@ async def helper_callback_handler(callback_query: CallbackQuery):
     await callback_query.answer()
 
 async def main():
-    print("🚀 Panel Bot is starting (Original Layout + Colored + Calculator)...")
+    print("🚀 Panel Bot is starting (Simple Layout + Colored + Calculator)...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
