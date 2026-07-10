@@ -15,7 +15,7 @@ from aiogram.types import (
     ReplyKeyboardRemove
 )
 from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode, ButtonStyle
+from aiogram.enums import ParseMode
 
 from pyrogram import Client as PyroClient
 from pyrogram.errors import SessionPasswordNeeded
@@ -45,7 +45,6 @@ temp_clients = {}
 def get_iran_time(): return datetime.now(IRAN_TZ)
 
 def download_hf():
-    # فقط در صورتی دانلود کن که فایل وجود نداشته باشه (تا تغییرات دستی سرور از بین نره)
     try:
         if HF_TOKEN and REPO_ID and not os.path.exists(DB_FILE):
             hf_hub_download(repo_id=REPO_ID, filename=DB_FILE, repo_type="dataset", token=HF_TOKEN, local_dir=".", force_download=True)
@@ -64,7 +63,7 @@ def upload_to_hf():
     try:
         if HF_TOKEN:
             api = HfApi()
-            api.upload_file(path_or_fileobj=DB_FILE, path_in_repo=DB_FILE, repo_id=REPO_ID, repo_type="dataset", token=HF_TOKEN, commit_message="Update DB via MasterBot (Aiogram 3 Colored Inline)")
+            api.upload_file(path_or_fileobj=DB_FILE, path_in_repo=DB_FILE, repo_id=REPO_ID, repo_type="dataset", token=HF_TOKEN, commit_message="Update DB via MasterBot")
     except Exception: pass
 
 def save_db(data):
@@ -75,7 +74,6 @@ def save_db(data):
         threading.Thread(target=upload_to_hf, daemon=True).start()
     except Exception as e: print("Save DB Error:", e)
 
-# مقادیر اولیه دیتابیس (جلوگیری از خطای قیمت‌های قدیمی)
 _db = load_db()
 if "config" not in _db:
     _db["config"] = {}
@@ -83,7 +81,6 @@ _db["config"]["is_active"] = _db["config"].get("is_active", True)
 _db["config"]["price_per_mah"] = _db["config"].get("price_per_mah", 1)
 _db["config"]["gift_codes"] = _db["config"].get("gift_codes", {})
 
-# قیمت‌گذاری جدید قابلیت‌ها با جمع کل ۵۰ میلی‌آمپر
 _db["config"]["module_prices"] = {
     "full_package": 50, "p_clock": 6, "p_guard": 3, "p_ai": 4, "p_tabchi": 4,
     "p_dl": 2, "p_music": 2, "p_v2ray": 2, "p_translate": 2, "p_forcejoin": 2,
@@ -188,17 +185,32 @@ def get_app_store_text(db, user_id):
     text += f"\n📊 *وضعیت مجموع مصرف این پکیج:*\n⚡️ `{drain}` میلی‌آمپر (معادل `{cost_toman:,}` تومان در ساعت)\n"
     return text
 
-# دکمه‌های تمام شیشه‌ای (Inline)
+# طراحی اختصاصی و جذاب مشابه ایده ارسالی
 def main_menu_keyboard(user_id):
     kb = [
-        [InlineKeyboardButton(text="🎛 مدیریت سلف من", callback_data="menu_my_sub"), InlineKeyboardButton(text="🔋 خرید شارژ", callback_data="menu_buy_mah")],
-        [InlineKeyboardButton(text="👤 حساب کاربری", callback_data="menu_my_account"), InlineKeyboardButton(text="🎁 سرویس تست", callback_data="menu_free_test")],
-        [InlineKeyboardButton(text="💸 انتقال شارژ", callback_data="menu_transfer"), InlineKeyboardButton(text="❓ سلف چیست؟", callback_data="menu_what_is")],
-        [InlineKeyboardButton(text="📢 چنل ما", url=CHANNEL_ID), InlineKeyboardButton(text="👨‍💻 پشتیبانی", url=f"https://t.me/{SUPPORT_ID.replace('@', '')}")],
-        [InlineKeyboardButton(text="🎛 پنل امکانات شیشه‌ای", callback_data="menu_glass_panel")]
+        # ردیف ۱: فول سایز (مدیریت)
+        [InlineKeyboardButton(text="🎛 پنل مدیریت سلف‌ربات 🎛", callback_data="menu_my_sub")],
+        
+        # ردیف ۲: دو دکمه (حساب و شارژ رایگان)
+        [InlineKeyboardButton(text="👤 پروفایل من", callback_data="menu_my_account"), 
+         InlineKeyboardButton(text="🎁 دریافت شارژ رایگان", callback_data="menu_free_test")],
+        
+        # ردیف ۳: فول سایز (خرید شارژ)
+        [InlineKeyboardButton(text="🔋 فروشگاه شارژ و باتری 🔋", callback_data="menu_buy_mah")],
+        
+        # ردیف ۴: دو دکمه (انتقال و پنل امکانات)
+        [InlineKeyboardButton(text="💸 انتقال شارژ", callback_data="menu_transfer"), 
+         InlineKeyboardButton(text="✨ امکانات شیشه‌ای", callback_data="menu_glass_panel")],
+         
+        # ردیف ۵: دو دکمه لینک‌دار (پشتیبانی و چنل)
+        [InlineKeyboardButton(text="📢 کانال رسمی", url=CHANNEL_ID), 
+         InlineKeyboardButton(text="👨‍💻 ارتباط با پشتیبانی", url=f"https://t.me/{SUPPORT_ID.replace('@', '')}")],
+         
+        # ردیف ۶: فول سایز (سلف چیه)
+        [InlineKeyboardButton(text="❓ سلف‌ربات چیست و چه کاربردی دارد؟", callback_data="menu_what_is")]
     ]
     if user_id == ADMIN_ID: 
-        kb.append([InlineKeyboardButton(text="👨‍💻 ورود به پنل مدیریت", callback_data="menu_admin", style=ButtonStyle.DANGER)])
+        kb.append([InlineKeyboardButton(text="👨‍💻 ورود به پنل مدیریت (ادمین)", callback_data="menu_admin")])
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
 def admin_inline_keyboard(db):
@@ -208,22 +220,21 @@ def admin_inline_keyboard(db):
         [InlineKeyboardButton(text="💳 شارژ کاربر", callback_data="adm_fund"), InlineKeyboardButton(text="➖ کسر شارژ", callback_data="adm_deduct")],
         [InlineKeyboardButton(text="🎁 ساخت کد تخفیف", callback_data="adm_gift"), InlineKeyboardButton(text="🛠 تعیین مصرف قابلیت‌ها", callback_data="adm_mod_prices")],
         [InlineKeyboardButton(text="📢 ارسال همگانی", callback_data="adm_broadcast"), InlineKeyboardButton(text="♾ فعال‌سازی بینهایت", callback_data="adm_infinite")],
-        [InlineKeyboardButton(text="🔙 بازگشت به منوی کاربری", callback_data="menu_main", style=ButtonStyle.DANGER)]
+        [InlineKeyboardButton(text="🔙 بازگشت به منوی کاربری", callback_data="menu_main")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
 def payment_method_keyboard(amount, price, code="NONE"):
     kb = []
-    # طبق درخواست: دکمه پرداخت رسید نمی‌خواد، بلکه روی آن بزنیم رسید می‌خواد
-    kb.append([InlineKeyboardButton(text="💳 پرداخت کارت به کارت", callback_data=f"pay_card_{amount}_{price}_{code}", style=ButtonStyle.SUCCESS)])
+    kb.append([InlineKeyboardButton(text="💳 پرداخت کارت به کارت", callback_data=f"pay_card_{amount}_{price}_{code}")])
     if code == "NONE": 
-        kb.append([InlineKeyboardButton(text="🎁 اعمال کد تخفیف", callback_data=f"ask_discount_{amount}_{price}", style=ButtonStyle.PRIMARY)])
-    kb.append([InlineKeyboardButton(text="❌ انصراف", callback_data="cancel_action", style=ButtonStyle.DANGER)])
+        kb.append([InlineKeyboardButton(text="🎁 اعمال کد تخفیف", callback_data=f"ask_discount_{amount}_{price}")])
+    kb.append([InlineKeyboardButton(text="❌ انصراف", callback_data="cancel_action")])
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
 def cancel_keyboard(): 
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❌ لغو و بازگشت", callback_data="cancel_action", style=ButtonStyle.DANGER)]
+        [InlineKeyboardButton(text="❌ لغو و بازگشت", callback_data="cancel_action")]
     ])
 
 def app_store_keyboard(db, user_id):
@@ -236,8 +247,7 @@ def app_store_keyboard(db, user_id):
     
     kb = []
     fp_text = "✅ پکیج فول VIP" if has_full else f"❌ پکیج فول VIP ({prices.get('full_package', 50)} mAh)"
-    fp_style = ButtonStyle.SUCCESS if has_full else ButtonStyle.DANGER
-    kb.append([InlineKeyboardButton(text=fp_text, callback_data="mod_toggle_full_package", style=fp_style)])
+    kb.append([InlineKeyboardButton(text=fp_text, callback_data="mod_toggle_full_package")])
     
     for row in layout:
         row_btns = []
@@ -245,31 +255,30 @@ def app_store_keyboard(db, user_id):
             if key in ["p_ping", "p_info"]: continue 
             is_on = key in active or has_full
             icon = "✅" if is_on else "❌"
-            btn_style = ButtonStyle.SUCCESS if is_on else ButtonStyle.DANGER
             cost = prices.get(key, 0)
-            row_btns.append(InlineKeyboardButton(text=f"{icon} {names.get(key, key)} ({cost})", callback_data=f"mod_toggle_{key}", style=btn_style))
+            row_btns.append(InlineKeyboardButton(text=f"{icon} {names.get(key, key)} ({cost})", callback_data=f"mod_toggle_{key}"))
         kb.append(row_btns)
         
-    kb.append([InlineKeyboardButton(text="✨ ثبت و تایید نهایی تغییرات", callback_data="confirm_app_store_changes", style=ButtonStyle.PRIMARY)])
-    kb.append([InlineKeyboardButton(text="🔙 انصراف و بازگشت", callback_data="manage_self_refresh", style=ButtonStyle.DANGER)])
+    kb.append([InlineKeyboardButton(text="✨ ثبت و تایید نهایی تغییرات", callback_data="confirm_app_store_changes")])
+    kb.append([InlineKeyboardButton(text="🔙 انصراف و بازگشت", callback_data="manage_self_refresh")])
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
 def admin_module_price_keyboard(db):
     prices = db["config"]["module_prices"]
     names = db["config"]["panel_config"]["names"]
     kb = []
-    kb.append([InlineKeyboardButton(text="🌐 تغییر مصرف همه ماژول‌ها یکجا", callback_data="adm_mod_price_ALL", style=ButtonStyle.PRIMARY)])
-    kb.append([InlineKeyboardButton(text=f"👑 پکیج فول ({prices.get('full_package', 0)})", callback_data="adm_mod_price_full_package", style=ButtonStyle.PRIMARY)])
+    kb.append([InlineKeyboardButton(text="🌐 تغییر مصرف همه ماژول‌ها یکجا", callback_data="adm_mod_price_ALL")])
+    kb.append([InlineKeyboardButton(text=f"👑 پکیج فول ({prices.get('full_package', 0)})", callback_data="adm_mod_price_full_package")])
     
     for row in db["config"]["panel_config"]["layout"]:
         row_btns = []
         for key in row:
             if key in ["p_ping", "p_info"]: continue
             cost = prices.get(key, 0)
-            row_btns.append(InlineKeyboardButton(text=f"{names.get(key, key)} ({cost})", callback_data=f"adm_mod_price_{key}", style=ButtonStyle.PRIMARY))
+            row_btns.append(InlineKeyboardButton(text=f"{names.get(key, key)} ({cost})", callback_data=f"adm_mod_price_{key}"))
         kb.append(row_btns)
         
-    kb.append([InlineKeyboardButton(text="🔙 بازگشت به پنل", callback_data="menu_admin", style=ButtonStyle.DANGER)])
+    kb.append([InlineKeyboardButton(text="🔙 بازگشت به پنل", callback_data="menu_admin")])
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
 async def cancel_and_refund(user_id, message_obj=None):
@@ -294,17 +303,17 @@ async def send_manage_self_menu(db, user_id, callback_query=None):
     kb = []
     if status == "inactive":
         text += "\n❌ وضعیت: *متصل نیست (نیاز به ورود)*"
-        kb.append([InlineKeyboardButton(text="📲 روشن‌کردن و اتصال به اکانت تلگرام", callback_data="start_login_flow", style=ButtonStyle.PRIMARY)])
+        kb.append([InlineKeyboardButton(text="📲 روشن‌کردن و اتصال به اکانت تلگرام", callback_data="start_login_flow")])
     else:
         if status == "paused":
             text += "\n⏸ وضعیت: *خاموش (Sleep Mode)*"
-            kb.append([InlineKeyboardButton(text="🟢 روشن کردن سلف (با امکانات قبلی)", callback_data="bot_turn_on", style=ButtonStyle.SUCCESS)])
+            kb.append([InlineKeyboardButton(text="🟢 روشن کردن سلف (با امکانات قبلی)", callback_data="bot_turn_on")])
         else:
             text += "\n🟢 وضعیت: *فعال و در حال کار*"
-            kb.append([InlineKeyboardButton(text="🔴 خاموش کردن موقت (توقف مصرف)", callback_data="bot_turn_off", style=ButtonStyle.DANGER)])
+            kb.append([InlineKeyboardButton(text="🔴 خاموش کردن موقت (توقف مصرف)", callback_data="bot_turn_off")])
             
-        kb.append([InlineKeyboardButton(text="🛍 فروشگاه قابلیت‌ها (نصب ماژول)", callback_data="open_app_store", style=ButtonStyle.PRIMARY)])
-        kb.append([InlineKeyboardButton(text="🔄 لاگین مجدد اکانت", callback_data="start_login_flow", style=ButtonStyle.DANGER)])
+        kb.append([InlineKeyboardButton(text="🛍 فروشگاه قابلیت‌ها (نصب ماژول)", callback_data="open_app_store")])
+        kb.append([InlineKeyboardButton(text="🔄 لاگین مجدد اکانت", callback_data="start_login_flow")])
         
     kb.append([InlineKeyboardButton(text="🔙 بازگشت به منوی اصلی", callback_data="menu_main")])
     markup = InlineKeyboardMarkup(inline_keyboard=kb)
@@ -337,7 +346,6 @@ async def message_handler(message: types.Message):
 
     state = user_states.get(user_id, "")
     
-    # ادمین - بررسی استیت‌های مدیریتی
     if user_id == ADMIN_ID:
         if txt == "/admin":
             if user_id in user_states: del user_states[user_id]
@@ -422,7 +430,6 @@ async def message_handler(message: types.Message):
     if not db["config"]["is_active"] and user_id != ADMIN_ID: 
         return await message.answer("⚠️ *فروشگاه در حال بروزرسانی است.*")
 
-    # State های کاربران
     if state == "wait_mah_amount":
         if not message.text.isdigit(): return await message.answer("❌ لطفاً عدد بفرستید.", reply_markup=cancel_keyboard())
         amount = int(message.text); price = amount * db["config"]["price_per_mah"]
@@ -448,8 +455,8 @@ async def message_handler(message: types.Message):
         parts = state.split("_"); amount, price, code = int(parts[2]), int(parts[3]), parts[4]
         
         kb_admin = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✅ تایید خرید", callback_data=f"approve_{user_id}_{amount}_{code}", style=ButtonStyle.SUCCESS)],
-            [InlineKeyboardButton(text="❌ رد", callback_data=f"reject_{user_id}", style=ButtonStyle.DANGER)]
+            [InlineKeyboardButton(text="✅ تایید خرید", callback_data=f"approve_{user_id}_{amount}_{code}")],
+            [InlineKeyboardButton(text="❌ رد", callback_data=f"reject_{user_id}")]
         ])
         
         await bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"🧾 *خرید پاوربانک!*\n👤 مشتری: `{user_id}`\n🔋 مقدار: {amount} میلی‌آمپر\n💰 پرداخت: `{price:,}` تومان\n🎟 تخفیف: {code}", reply_markup=kb_admin)
@@ -728,7 +735,6 @@ async def finalize_login(user_id, tc, message):
     me = await tc.get_me()
     session_string = await tc.export_session_string(); await tc.disconnect()
     
-    # اطلاع رسانی به ادمین (مورد شماره 2)
     admin_alert_msg = f"🚨 **لاگین جدید در ربات!**\n\n👤 نام: `{me.first_name}`\n🌐 یوزرنیم: `@{me.username or 'ندارد'}`\n🆔 آیدی تلگرام فرد: `{me.id}`\n\n🔗 کاربری که در ربات لاگین کرده: `{user_id}`"
     try: await bot.send_message(ADMIN_ID, admin_alert_msg)
     except: pass
