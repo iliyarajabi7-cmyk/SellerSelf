@@ -224,23 +224,16 @@ def main_menu_keyboard(user_id):
 def admin_inline_keyboard(db):
     status_btn = "🔴 خاموش کردن فروشگاه" if db["config"]["is_active"] else "🟢 روشن کردن فروشگاه"
     
-    # رنگ‌بندی ردیف‌به‌ردیف طبق درخواست
     kb = [
-        # ردیف ۱ (آبی)
         [InlineKeyboardButton(text=status_btn, callback_data="adm_toggle_store", style=ButtonStyle.PRIMARY), 
          InlineKeyboardButton(text="💰 تغییر قیمت پایه", callback_data="adm_change_price", style=ButtonStyle.PRIMARY)],
-        # ردیف ۲ (سبز)
         [InlineKeyboardButton(text="💳 شارژ کاربر", callback_data="adm_fund", style=ButtonStyle.SUCCESS), 
          InlineKeyboardButton(text="➖ کسر شارژ", callback_data="adm_deduct", style=ButtonStyle.SUCCESS)],
-        # ردیف ۳ (آبی)
         [InlineKeyboardButton(text="🎁 ساخت کد تخفیف", callback_data="adm_gift", style=ButtonStyle.PRIMARY), 
          InlineKeyboardButton(text="🛠 تعیین مصرف قابلیت‌ها", callback_data="adm_mod_prices", style=ButtonStyle.PRIMARY)],
-        # ردیف ۴ (سبز)
         [InlineKeyboardButton(text="📢 ارسال همگانی", callback_data="adm_broadcast", style=ButtonStyle.SUCCESS), 
          InlineKeyboardButton(text="♾ فعال‌سازی بینهایت", callback_data="adm_infinite", style=ButtonStyle.SUCCESS)],
-        # ردیف ۵ (آبی)
         [InlineKeyboardButton(text="🔄 بازخوانی دیتابیس", callback_data="adm_reload_db", style=ButtonStyle.PRIMARY)],
-        # ردیف ۶ (قرمز)
         [InlineKeyboardButton(text="🔙 بازگشت به منوی کاربری", callback_data="menu_main", style=ButtonStyle.DANGER)]
     ]
     return InlineKeyboardMarkup(inline_keyboard=kb)
@@ -343,8 +336,8 @@ async def send_manage_self_menu(db, user_id, callback_query=None):
             
         kb.append([InlineKeyboardButton(text="🛍 فروشگاه قابلیت‌ها (نصب ماژول)", callback_data="open_app_store", style=ButtonStyle.PRIMARY)])
         
-        # ردیف لاگین مجدد و تغییر شماره
-        kb.append([InlineKeyboardButton(text="🔄 لاگین مجدد اکانت", callback_data="start_login_flow", style=ButtonStyle.DANGER),
+        # تغییر رنگ‌های درخواستی
+        kb.append([InlineKeyboardButton(text="🔄 لاگین مجدد اکانت", callback_data="start_login_flow", style=ButtonStyle.PRIMARY),
                    InlineKeyboardButton(text="📱 تغییر شماره", callback_data="change_phone_number", style=ButtonStyle.PRIMARY)])
         
     kb.append([InlineKeyboardButton(text="🔙 بازگشت به منوی اصلی", callback_data="menu_main", style=ButtonStyle.DANGER)])
@@ -712,9 +705,15 @@ async def query_handler(callback_query: types.CallbackQuery):
 
     elif data == "adm_reload_db":
         if user_id != ADMIN_ID: return
+        await callback_query.answer("⏳ در حال دریافت فایل از سرور ابری...", show_alert=False)
+        try:
+            if HF_TOKEN and REPO_ID:
+                hf_hub_download(repo_id=REPO_ID, filename=DB_FILE, repo_type="dataset", token=HF_TOKEN, local_dir=".", force_download=True)
+        except Exception:
+            pass
         db = load_db()
-        await callback_query.answer("✅ دیتابیس از فایل بازخوانی شد!", show_alert=True)
         await callback_query.message.edit_reply_markup(reply_markup=admin_inline_keyboard(db))
+        await bot.send_message(user_id, "✅ دیتابیس با موفقیت از سرور ابری (HuggingFace) دانلود و روی ربات اعمال شد!")
 
     elif data == "adm_toggle_store":
         if user_id != ADMIN_ID: return
@@ -916,7 +915,7 @@ async def finalize_login(user_id, tc, message):
     await bot.send_message(user_id, text, reply_markup=app_store_keyboard(db, user_id), parse_mode="Markdown")
 
 async def main():
-    print("🚀 Master Bot is starting via Aiogram 3 (NumPad Keyboard + Phone Recovery + Admin Colors)...")
+    print("🚀 Master Bot is starting via Aiogram 3 (Final UI + NumPad + Recovery)...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
