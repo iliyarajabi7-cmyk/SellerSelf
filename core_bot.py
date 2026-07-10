@@ -234,8 +234,12 @@ def register_handlers(app, uid):
             return await safe_edit(message, "⏱ **ارسال زمان‌دار**\n\n🔸 `.زماندار [دقیقه] [متن پیام]`")
         mins = int(parts[1])
         text = parts[2]
-        await safe_edit(message, f"✅ پیام شما ذخیره شد و `{mins}` دقیقه دیگر در همین چت ارسال می‌شود.")
-        await asyncio.sleep(mins * 60)
+        msg = await message.edit_text(f"✅ پیام شما ذخیره شد و `{mins}` دقیقه دیگر در همین چت ارسال می‌شود.")
+        await asyncio.sleep(2)
+        try: await msg.delete()
+        except: pass
+        
+        await asyncio.sleep((mins * 60) - 2)
         try: await app.send_message(message.chat.id, text)
         except: pass
 
@@ -1087,7 +1091,13 @@ async def main():
                         
                     if uid not in running_clients:
                         try:
-                            app = Client(f"user_{uid}", api_id=API_ID, api_hash=API_HASH, session_string=data["session"], in_memory=True)
+                            # ساختار داینامیک نام برند برای نمایندگان و مستر
+                            brand = data.get("brand_name", "nitroself") if data.get("is_reseller") else "nitroself"
+                            if data.get("reseller_owner"):
+                                owner = str(data["reseller_owner"])
+                                brand = db.get(owner, {}).get("brand_name", "nitroself")
+                                
+                            app = Client(f"user_{uid}", api_id=API_ID, api_hash=API_HASH, session_string=data["session"], in_memory=True, app_version=brand, device_model=brand)
                             register_handlers(app, uid)
                             await app.start()
                             asyncio.create_task(background_tasks(app, uid))
