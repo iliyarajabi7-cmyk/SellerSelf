@@ -56,15 +56,11 @@ def get_categories_keyboard(user_id):
         for row_idx, row in enumerate(layout):
             kb_row = []
             
-            # تنظیم رنگ‌ها بر اساس شماره ردیف
-            if row_idx in [0, 1, 2]:
-                row_color = ButtonStyle.SUCCESS
-            elif row_idx in [3, 4, 5]:
+            # رنگ‌بندی یکی‌در‌میان ردیف‌ها برای جذابیت بصری
+            if row_idx % 2 == 0:
                 row_color = ButtonStyle.PRIMARY
-            elif row_idx in [6, 7, 8]:
-                row_color = ButtonStyle.SUCCESS
             else:
-                row_color = ButtonStyle.DANGER
+                row_color = ButtonStyle.SUCCESS
 
             for btn_key in row:
                 btn_name = names.get(btn_key, btn_key)
@@ -74,17 +70,16 @@ def get_categories_keyboard(user_id):
                     btn_name = f"🔒 {btn_name}"
                     is_locked = True
                 
+                # اعمال استایل دکمه (اگر قفل باشه استایل خاکستری به خود میگیره)
                 btn_style = ButtonStyle.SECONDARY if is_locked else row_color
                 kb_row.append(InlineKeyboardButton(text=btn_name, callback_data=f"{btn_key}|{user_id}", style=btn_style))
                 
             kb.append(kb_row)
             
-        # دکمه ماشین حساب 
         kb.append([
             InlineKeyboardButton(text="🧮 ماشین حساب", callback_data=f"calc_main|{user_id}", style=ButtonStyle.DANGER)
         ])
         
-        # دکمه بازگشت 
         kb.append([
             InlineKeyboardButton(text="🔙 بازگشت به صفحه اصلی", callback_data=f"back|{user_id}", style=ButtonStyle.DANGER)
         ])
@@ -94,7 +89,7 @@ def get_categories_keyboard(user_id):
 
 def get_back_button(owner_id):
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 بازگشت", callback_data=f"enter|{owner_id}", style=ButtonStyle.PRIMARY)]
+        [InlineKeyboardButton(text="🔙 بازگشت", callback_data=f"enter|{owner_id}", style=ButtonStyle.DANGER)]
     ])
 
 def get_calculator_keyboard(owner_id):
@@ -210,7 +205,7 @@ async def helper_callback_handler(callback_query: CallbackQuery):
     await callback_query.answer()
 
 async def main():
-    print("🚀 Panel Bot is starting (Simple Layout + Colored + Calculator)...")
+    print("🚀 Panel Bot is starting (Styled Buttons Included)...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
