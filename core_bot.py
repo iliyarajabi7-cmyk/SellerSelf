@@ -17,7 +17,6 @@ API_ID = 6
 API_HASH = "eb06d4abfb49dc3eeb1aeb98ae0f581e"
 DB_FILE = "database.json"
 
-# ⚠️ یوزرنیم ربات پنل و اطلاعات هاگینگ‌فیس را اینجا بگذارید
 HELPER_BOT_USERNAME = "InlineHelper_Bot" 
 REPO_ID = "SnowBig/SellerDB" 
 HF_TOKEN = os.environ.get("HF_TOKEN")
@@ -99,8 +98,17 @@ async def background_tasks(app, uid):
             if settings.get("clock_status") and has_perm(uid, "p_clock"):
                 if time_str != last_clock_time:
                     ft = format_time(time_str, settings.get("font", 1))
-                    name = settings.get("base_name", "User")
-                    try: await app.update_profile(first_name=f"{name} | {ft}"); last_clock_time = time_str
+                    base_first = settings.get("base_first_name", "User")
+                    base_last = settings.get("base_last_name", "")
+                    # اصلاح ساعت: چسباندن ساعت به فامیل (اگر بود) وگرنه به اسم
+                    try:
+                        if base_last:
+                            new_last = f"{base_last} | {ft}"
+                            await app.update_profile(first_name=base_first, last_name=new_last)
+                        else:
+                            new_first = f"{base_first} | {ft}"
+                            await app.update_profile(first_name=new_first, last_name="")
+                        last_clock_time = time_str
                     except FloodWait as e: await asyncio.sleep(e.value + 2)
                     except: pass
 
@@ -135,7 +143,7 @@ async def background_tasks(app, uid):
 def register_handlers(app, uid):
     if uid not in USER_SETTINGS:
         USER_SETTINGS[uid] = {
-            "clock_status": False, "base_name": "", "font": 1, "bio_clock_status": False, "base_bio": "", "bio_font": 1,
+            "clock_status": False, "base_first_name": "", "base_last_name": "", "font": 1, "bio_clock_status": False, "base_bio": "", "bio_font": 1,
             "tabchi_status": False, "tabchi_text": "", "tabchi_targets": set(), "tabchi_interval": 30, "last_tabchi": 0,
             "auto_clear_chats": {}, "anti_spam_groups": set(), "spam_tracker": {},
             "guardian": {
@@ -188,7 +196,8 @@ def register_handlers(app, uid):
                 full_name = " ".join(parts[2:])
                 fname, lname = (full_name.split("|", 1) + [""])[:2]
                 await app.update_profile(first_name=fname.strip(), last_name=lname.strip())
-                USER_SETTINGS[uid]["base_name"] = fname.strip()
+                USER_SETTINGS[uid]["base_first_name"] = fname.strip()
+                USER_SETTINGS[uid]["base_last_name"] = lname.strip()
                 await safe_edit(message, f"✅ نام شما به `{fname.strip()} {lname.strip()}` تغییر یافت.")
             elif act == "بیو":
                 bio_text = " ".join(parts[2:])[:70]
@@ -217,6 +226,41 @@ def register_handlers(app, uid):
                 except Exception as e:
                     await safe_edit(message, f"❌ خطا در تنظیم تولد:\n`{e}`")
         except Exception as e: await safe_edit(message, f"❌ خطای سیستمی:\n`{e}`")
+
+    # ----- قابلیت جدید ارسال زماندار -----
+    @app.on_message(filters.me & filters.command("زماندار", prefixes="."))
+    async def scheduled_msg(client, message):
+        if not has_perm(uid, "p_schedule"): return await locked_msg(message)
+        parts = message.text.split(maxsplit=2)
+        if len(parts) < 3 or not parts[1].isdigit(): 
+            return await safe_edit(message, "⏱ **ارسال زمان‌دار**\n\n🔸 `.زماندار [دقیقه] [متن پیام]`")
+        mins = int(parts[1])
+        text = parts[2]
+        await safe_edit(message, f"✅ پیام شما ذخیره شد و `{mins}` دقیقه دیگر در همین چت ارسال می‌شود.")
+        await asyncio.sleep(mins * 60)
+        try: await app.send_message(message.chat.id, text)
+        except: pass
+    
+    # ----- قابلیت جدید اسکرین‌شات -----
+    @app.on_message(filters.me & filters.command("اسکرین", prefixes="."))
+    async def screen_msg(client, message):
+        if not has_perm(uid, "p_screen"): return await locked_msg(message)
+        if not message.reply_to_message: return await safe_edit(message, "❌ لطفاً برای گرفتن اسکرین‌شات روی یک پیام ریپلای کنید.")
+        await safe_edit(message, "⏳ در حال ساخت اسکرین‌شات باکیفیت...")
+        try:
+            bot_id = "QuotLyBot"
+            fwd = await message.reply_to_message.forward(bot_id)
+            await asyncio.sleep(2)
+            async for bot_msg in app.get_chat_history(bot_id, limit=3):
+                if bot_msg.sticker or bot_msg.photo or bot_msg.document:
+                    dl = await bot_msg.download()
+                    await app.send_document(message.chat.id, dl, file_name="Screenshot.webp")
+                    os.remove(dl)
+                    await message.delete()
+                    return
+            await safe_edit(message, "❌ سرور ساخت اسکرین‌شات در حال حاضر پاسخگو نیست.")
+        except Exception as e:
+            await safe_edit(message, f"❌ خطا: {e}")
 
     @app.on_message(filters.me & filters.command(["سین پیوی", "سین گروه", "سین کانال", "سین ربات"], prefixes="."))
     async def read_all_cmd(client, message):
@@ -326,13 +370,18 @@ def register_handlers(app, uid):
             action = parts[2] if len(parts) > 2 else ""
             if action == "روشن":
                 if not s["clock_status"]:
-                    try: me = await app.get_me(); s["base_name"] = (me.first_name or "User").split(" | ")[0]
-                    except: s["base_name"] = "User"
+                    try: 
+                        me = await app.get_me()
+                        s["base_first_name"] = (me.first_name or "User").split(" | ")[0]
+                        s["base_last_name"] = (me.last_name or "").split(" | ")[0]
+                    except: 
+                        s["base_first_name"] = "User"
+                        s["base_last_name"] = ""
                 s["clock_status"] = True; s["font"] = int(parts[3]) if len(parts) >= 4 and parts[3].isdigit() else 1
-                await safe_edit(message, "✅ ساعت اسم فعال شد.")
+                await safe_edit(message, "✅ ساعت اسم (روی فامیل) فعال شد.")
             elif action == "خاموش": 
                 s["clock_status"] = False
-                try: await app.update_profile(first_name=s["base_name"])
+                try: await app.update_profile(first_name=s["base_first_name"], last_name=s["base_last_name"])
                 except: pass
                 await safe_edit(message, "❌ ساعت اسم خاموش شد.")
 
@@ -966,7 +1015,7 @@ def register_handlers(app, uid):
                 else: await app.send_message(message.chat.id, msg_text)
             except: pass
 
-    @app.on_message(filters.me & filters.text & ~filters.command(["ping", "پینگ", "پنل", "panel", "پروفایل", "هوش", "لینک", "ارز", "تتر", "بیتکوین", "اتریوم", "دوج", "ترون", "سولانا", "شیبا", "کاردانو", "ریپل", "لوگو", "ترجمه", "اهنگ", "ویس", "تگ", "تقلب", "تاس", "ساعت", "تبچی", "اسپم", "پاکسازی", "حذف", "دانلود", "قفل", "فیلتر", "اجباری", "پاسخ", "ریکت", "نگهبان", "انتی", "سکوت", "ازادی", "منشی", "اکشن", "حالت", "ایدی", "قلب", "کامنت", "خوشامد", "سین پیوی", "سین گروه", "سین کانال", "سین ربات", "کیوار", "کانفیگ", "پروکسی"], prefixes=[".", "/", ""]))
+    @app.on_message(filters.me & filters.text & ~filters.command(["ping", "پینگ", "پنل", "panel", "پروفایل", "هوش", "لینک", "ارز", "تتر", "بیتکوین", "اتریوم", "دوج", "ترون", "سولانا", "شیبا", "کاردانو", "ریپل", "لوگو", "ترجمه", "اهنگ", "ویس", "تگ", "تقلب", "تاس", "ساعت", "تبچی", "اسپم", "پاکسازی", "حذف", "دانلود", "قفل", "فیلتر", "اجباری", "پاسخ", "ریکت", "نگهبان", "انتی", "سکوت", "ازادی", "منشی", "اکشن", "حالت", "ایدی", "قلب", "کامنت", "خوشامد", "سین پیوی", "سین گروه", "سین کانال", "سین ربات", "کیوار", "کانفیگ", "پروکسی", "زماندار", "اسکرین"], prefixes=[".", "/", ""]))
     async def auto_text_formatter(client, message):
         if not has_perm(uid, "p_textmode"): return
         m = USER_SETTINGS[uid]["text_mode"]
