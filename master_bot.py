@@ -84,7 +84,6 @@ _db["config"]["fjoin_active"] = _db["config"].get("fjoin_active", False)
 _db["config"]["fjoin"] = _db["config"].get("fjoin", [])
 _db["config"]["gateway"] = _db["config"].get("gateway", {"active": False, "merchant": ""})
 
-# اضافه شدن قابلیت‌های جدید و تنظیم مجدد قیمت‌ها برای جمع 50
 _db["config"]["module_prices"] = {
     "full_package": 50, "p_clock": 5, "p_guard": 3, "p_ai": 3, "p_tabchi": 3,
     "p_dl": 2, "p_music": 2, "p_v2ray": 2, "p_translate": 2, "p_forcejoin": 2,
@@ -109,18 +108,18 @@ _db["config"]["panel_config"] = {
         ["p_comment", "p_crypto", "p_schedule", "p_screen"]
     ],
     "names": {
-        "p_textmode": "🎨 حالت متن", "p_clock": "⏰ ساعت", "p_guard": "🛡 نگهبان چت", 
-        "p_ping": "🏓 پینگ", "p_logo": "🖼 لوگو", "p_locks": "🔐 قفل‌ها", 
-        "p_action": "🎭 اکشن", "p_monshi": "🤖 منشی", "p_filter": "🚫 فیلترکلمات", 
-        "p_autoreply": "💬 پاسخ‌خودکار", "p_forcejoin": "🛑 عضویت اجباری", 
-        "p_dl": "📥 دانلودر", "p_react": "❤️ ریکت", "p_spam": "💣 اسپم", 
-        "p_mute": "🔇 سکوت/آزادی", "p_info": "🆔 آیدی", "p_tag": "🎯 تگ", 
-        "p_purge": "🧹 پاکسازی", "p_ai": "🧠 هوش مصنوعی", "p_translate": "🌍 ترجمه", 
-        "p_anim": "💖 انیمیشن", "p_cheat": "🎲 تقلب", "p_tts": "🎤 تبدیل به ویس", 
-        "p_music": "🎵 سرچ آهنگ", "p_tabchi": "📢 تبچی", "p_comment": "📝 کامنت اول", 
-        "p_crypto": "💰 قیمت ارز", "p_readall": "👁‍🗨 سین‌زن همگانی", 
-        "p_v2ray": "🌐 پروکسی و V2ray", "p_qr": "⬛️ کیوآر کد", "p_profile": "👤 مدیریت پروفایل",
-        "p_schedule": "⏱ ارسال زمان‌دار", "p_screen": "📸 اسکرین‌شات پیام"
+        "p_textmode": "حالت متن", "p_clock": "ساعت", "p_guard": "نگهبان چت", 
+        "p_ping": "پینگ", "p_logo": "لوگو", "p_locks": "قفل‌ها", 
+        "p_action": "اکشن", "p_monshi": "منشی", "p_filter": "فیلترکلمات", 
+        "p_autoreply": "پاسخ‌خودکار", "p_forcejoin": "عضویت اجباری", 
+        "p_dl": "دانلودر", "p_react": "ریکت", "p_spam": "اسپم", 
+        "p_mute": "سکوت/آزادی", "p_info": "آیدی", "p_tag": "تگ", 
+        "p_purge": "پاکسازی", "p_ai": "هوش مصنوعی", "p_translate": "ترجمه", 
+        "p_anim": "انیمیشن", "p_cheat": "تقلب", "p_tts": "تبدیل به ویس", 
+        "p_music": "سرچ آهنگ", "p_tabchi": "تبچی", "p_comment": "کامنت اول", 
+        "p_crypto": "قیمت ارز", "p_readall": "سین‌زن همگانی", 
+        "p_v2ray": "پروکسی و V2ray", "p_qr": "کیوآر کد", "p_profile": "مدیریت پروفایل",
+        "p_schedule": "ارسال زمان‌دار", "p_screen": "اسکرین‌شات پیام"
     }
 }
 save_db(_db)
@@ -149,9 +148,9 @@ async def check_fjoin_status(user_id, db):
         try:
             member = await bot.get_chat_member(ch["id"], user_id)
             if member.status in ['left', 'kicked', 'banned']: raise Exception
-            kb.append([InlineKeyboardButton(text=f"✅ {ch['name']}", url=ch['link'])])
+            kb.append([InlineKeyboardButton(text=f"✅ {ch['name']}", url=ch['link'], style=ButtonStyle.SUCCESS)])
         except:
-            kb.append([InlineKeyboardButton(text=f"❌ {ch['name']} (عضو نیستید)", url=ch['link'])])
+            kb.append([InlineKeyboardButton(text=f"❌ {ch['name']} (عضو نیستید)", url=ch['link'], style=ButtonStyle.DANGER)])
             all_joined = False
     
     if not all_joined:
@@ -254,8 +253,8 @@ def main_menu_keyboard(db, user_id):
     else:
         kb.append([InlineKeyboardButton(text="🤝 درخواست نمایندگی", callback_data="menu_req_reseller", style=ButtonStyle.PRIMARY)])
         
-    # دکمه دریافت زیرمجموعه
     kb.append([InlineKeyboardButton(text="🔗 دریافت لینک زیرمجموعه‌گیری (درآمدزایی)", callback_data="menu_referral", style=ButtonStyle.SUCCESS)])
+    # بدون استایل تا رنگ دیفالت (خاکستری) بگیرد
     kb.append([InlineKeyboardButton(text="❓ سلف‌ربات چیست و چه کاربردی دارد؟", callback_data="menu_what_is")])
     
     if user_id == ADMIN_ID: 
@@ -304,6 +303,7 @@ def get_paginated_users_keyboard(db, page, is_reseller_view=False, search_query=
     page_users = users[start_idx:end_idx]
     
     kb = []
+    # بدون استایل = دیفالت تلگرام
     kb.append([InlineKeyboardButton(text="اسم | یوزرنیم | آیدی | شماره", callback_data="ignore")])
     for u in page_users:
         ud = db[u]
@@ -311,12 +311,12 @@ def get_paginated_users_keyboard(db, page, is_reseller_view=False, search_query=
         uname = f"@{ud.get('username')}" if ud.get("username") else "بدون یوزر"
         phone = ud.get("phone", "بدون شماره")
         btn_text = f"👤 {name[:10]} | {uname} | {u} | {phone}"
-        kb.append([InlineKeyboardButton(text=btn_text, callback_data=f"adm_user_info_{u}")])
+        kb.append([InlineKeyboardButton(text=btn_text, callback_data=f"adm_user_info_{u}", style=ButtonStyle.PRIMARY)])
         
     nav_btns = []
     prefix = "adm_resellers_list" if is_reseller_view else "adm_users_list"
     if page > 0: nav_btns.append(InlineKeyboardButton(text="⬅️ قبلی", callback_data=f"{prefix}_{page-1}", style=ButtonStyle.PRIMARY))
-    nav_btns.append(InlineKeyboardButton(text=f"صفحه {page+1}/{total_pages}", callback_data="ignore", style=ButtonStyle.SECONDARY))
+    nav_btns.append(InlineKeyboardButton(text=f"صفحه {page+1}/{total_pages}", callback_data="ignore"))
     if page < total_pages - 1: nav_btns.append(InlineKeyboardButton(text="بعدی ➡️", callback_data=f"{prefix}_{page+1}", style=ButtonStyle.PRIMARY))
     
     if nav_btns: kb.append(nav_btns)
@@ -348,10 +348,11 @@ def app_store_keyboard(db, user_id):
     
     kb = []
     
+    # حذف ایموجی تیک و ضربدر و جایگزینی با رنگ
     if has_full:
         kb.append([InlineKeyboardButton(text="پکیج فول VIP", callback_data="mod_toggle_full_package", style=ButtonStyle.SUCCESS)])
     else:
-        kb.append([InlineKeyboardButton(text=f"پکیج فول VIP ({prices.get('full_package', 50)} mAh)", callback_data="mod_toggle_full_package")])
+        kb.append([InlineKeyboardButton(text=f"پکیج فول VIP ({prices.get('full_package', 50)} mAh)", callback_data="mod_toggle_full_package", style=ButtonStyle.DANGER)])
     
     for row in layout:
         row_btns = []
@@ -363,7 +364,7 @@ def app_store_keyboard(db, user_id):
             if is_on:
                 row_btns.append(InlineKeyboardButton(text=f"{names.get(key, key)} ({cost})", callback_data=f"mod_toggle_{key}", style=ButtonStyle.SUCCESS))
             else:
-                row_btns.append(InlineKeyboardButton(text=f"{names.get(key, key)} ({cost})", callback_data=f"mod_toggle_{key}")])
+                row_btns.append(InlineKeyboardButton(text=f"{names.get(key, key)} ({cost})", callback_data=f"mod_toggle_{key}", style=ButtonStyle.DANGER))
         kb.append(row_btns)
         
     kb.append([InlineKeyboardButton(text="✨ ثبت و تایید نهایی تغییرات", callback_data="confirm_app_store_changes", style=ButtonStyle.PRIMARY)])
@@ -442,7 +443,6 @@ async def message_handler(message: types.Message):
     
     txt = message.text or ""
     
-    # ------------------ FJoin & Referral Check Middleware ------------------
     if txt in ["/start", "❌ لغو", "❌ لغو عملیات"] or txt.startswith("/start "):
         await cancel_and_refund(user_id)
         
@@ -467,7 +467,6 @@ async def message_handler(message: types.Message):
                 
         if txt.startswith("/start") or txt == "❌ لغو" or txt == "❌ لغو عملیات":
             return await message.answer("👋 *به فروشگاه رسمی سلف‌ربات خوش آمدید!*\nاز منوی شیشه‌ای زیر یکی از گزینه‌ها را انتخاب کنید:", reply_markup=main_menu_keyboard(db, user_id))
-    # ------------------------------------------------------------------------
 
     fjoin_passed, fjoin_kb = await check_fjoin_status(user_id, db)
     if not fjoin_passed and user_id != ADMIN_ID:
@@ -701,15 +700,13 @@ async def query_handler(callback_query: types.CallbackQuery):
     user_id = callback_query.from_user.id
     db = load_db()
     
-    # ------------------ FJoin Check Middleware ------------------
     if data != "check_fjoin_btn" and not data.startswith("adm_") and user_id != ADMIN_ID:
         fjoin_passed, fjoin_kb = await check_fjoin_status(user_id, db)
         if not fjoin_passed:
             try: await callback_query.message.edit_text("⚠️ برای ادامه کار، عضویت در کانال‌های زیر الزامی است:", reply_markup=fjoin_kb)
             except: pass
             return await callback_query.answer("⚠️ ابتدا در کانال‌ها عضو شوید!", show_alert=True)
-    # -------------------------------------------------------------
-    
+            
     if data.startswith("kp_"):
         parts = data.split("_"); kp_type, action = parts[1], parts[2]
         if user_id not in temp_clients: temp_clients[user_id] = {}
@@ -844,7 +841,6 @@ async def query_handler(callback_query: types.CallbackQuery):
 
     elif data == "demo_alert": await callback_query.answer("⚠️ این یک پیش‌نمایش است! برای استفاده باید سلف را روی اکانت خود فعال کنید.", show_alert=True)
     
-    # ---------------- بخش نمایندگی ----------------
     elif data == "menu_req_reseller":
         user_states[user_id] = f"wait_reseller_receipt"
         text = f"🤝 **درخواست پنل نمایندگی**\n\nبا خرید این پنل، شما امکان فروش سلف‌ها به نام و برند خود را خواهید داشت.\n💰 **هزینه فعال‌سازی:** `250,000` تومان (مقطوع)\n\n💳 *شماره کارت جهت واریز:*\n`{CARD_NUMBER}`\n👤 بنام: {CARD_NAME}\n\n📸 *لطفاً عکس رسید را همینجا ارسال کنید:*"
@@ -867,20 +863,19 @@ async def query_handler(callback_query: types.CallbackQuery):
     elif data in ["resell_add_acc", "resell_manage_acc"]:
         await callback_query.answer("⚠️ این بخش به زودی در آپدیت بعدی باز می‌شود!", show_alert=True)
         
-    # ---------------- ادمین پنل ----------------
     elif data == "menu_admin":
         if user_id != ADMIN_ID: return
         await callback_query.message.edit_text("👨‍💻 *پنل مدیریت*", reply_markup=admin_inline_keyboard(db))
 
     elif data == "adm_reload_db":
         if user_id != ADMIN_ID: return
-        await callback_query.answer("⏳ در حال دریافت...", show_alert=False)
+        await callback_query.answer("⏳ در حال دریافت فایل از سرور ابری...", show_alert=False)
         try:
             if HF_TOKEN and REPO_ID: hf_hub_download(repo_id=REPO_ID, filename=DB_FILE, repo_type="dataset", token=HF_TOKEN, local_dir=".", force_download=True)
         except: pass
         db = load_db()
         await callback_query.message.edit_reply_markup(reply_markup=admin_inline_keyboard(db))
-        await bot.send_message(user_id, "✅ دیتابیس با موفقیت بازخوانی شد!")
+        await bot.send_message(user_id, "✅ دیتابیس با موفقیت از سرور ابری (HuggingFace) دانلود و روی ربات اعمال شد!")
         
     elif data.startswith("adm_users_list_"):
         if user_id != ADMIN_ID: return
@@ -1132,7 +1127,7 @@ async def finalize_login(user_id, tc, message):
     await bot.send_message(user_id, text, reply_markup=app_store_keyboard(db, user_id), parse_mode="Markdown")
 
 async def main():
-    print("🚀 Master Bot is starting via Aiogram 3 (Final Full Package)...")
+    print("🚀 Master Bot is starting via Aiogram 3 (Final Full Features - No Style Errors)...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
