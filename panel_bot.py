@@ -56,7 +56,6 @@ def get_categories_keyboard(user_id):
         for row_idx, row in enumerate(layout):
             kb_row = []
             
-            # رنگ‌بندی یکی‌در‌میان ردیف‌ها برای جذابیت بصری
             if row_idx % 2 == 0:
                 row_color = ButtonStyle.PRIMARY
             else:
@@ -70,7 +69,6 @@ def get_categories_keyboard(user_id):
                     btn_name = f"🔒 {btn_name}"
                     is_locked = True
                 
-                # اعمال استایل دکمه (اگر قفل باشه استایل خاکستری به خود میگیره)
                 btn_style = ButtonStyle.SECONDARY if is_locked else row_color
                 kb_row.append(InlineKeyboardButton(text=btn_name, callback_data=f"{btn_key}|{user_id}", style=btn_style))
                 
@@ -89,7 +87,7 @@ def get_categories_keyboard(user_id):
 
 def get_back_button(owner_id):
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 بازگشت", callback_data=f"enter|{owner_id}", style=ButtonStyle.DANGER)]
+        [InlineKeyboardButton(text="🔙 بازگشت", callback_data=f"enter|{owner_id}", style=ButtonStyle.PRIMARY)]
     ])
 
 def get_calculator_keyboard(owner_id):
@@ -142,7 +140,9 @@ PANEL_TEXTS = {
     "p_readall": "👁‍🗨 <b>سین زدن دسته‌جمعی</b>\n🔸 <code>.سین پیوی</code>",
     "p_v2ray": "🌐 <b>دریافت پروکسی و V2ray</b>\n🔸 <code>.کانفیگ</code>",
     "p_qr": "⬛️ <b>مدیریت QR Code</b>\n🔸 <code>.کیوار ساخت [متن]</code>",
-    "p_profile": "👤 <b>مدیریت پیشرفته پروفایل</b>\n🔸 <code>.پروفایل عکس</code> (ریپلای)"
+    "p_profile": "👤 <b>مدیریت پیشرفته پروفایل</b>\n🔸 <code>.پروفایل عکس</code> (ریپلای)",
+    "p_schedule": "⏱ <b>ارسال زمان‌دار هوشمند</b>\n🔸 <code>.زماندار [دقیقه] [متن پیام]</code>\nمثال: <code>.زماندار 5 سلام فردا میبینمت</code>",
+    "p_screen": "📸 <b>اسکرین‌شات از پیام</b>\n🔸 کافیست روی پیام مورد نظر ریپلای کنید و بفرستید:\n<code>.اسکرین</code>"
 }
 
 @dp.inline_query()
@@ -205,7 +205,7 @@ async def helper_callback_handler(callback_query: CallbackQuery):
     await callback_query.answer()
 
 async def main():
-    print("🚀 Panel Bot is starting (Styled Buttons Included)...")
+    print("🚀 Panel Bot is starting...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
