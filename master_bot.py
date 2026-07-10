@@ -199,7 +199,7 @@ def main_menu_keyboard(user_id):
         
         # ردیف ۴ (سبز): دو دکمه
         [InlineKeyboardButton(text="💸 انتقال شارژ", callback_data="menu_transfer", style=ButtonStyle.SUCCESS), 
-         InlineKeyboardButton(text="✨ امکانات شیشه‌ای", callback_data="menu_glass_panel", style=ButtonStyle.SUCCESS)],
+         InlineKeyboardButton(text="👁‍🗨 پیش‌نمایش پنل", callback_data="menu_glass_panel", style=ButtonStyle.SUCCESS)],
          
         # ردیف ۵ (قرمز): دو دکمه لینک‌دار
         [InlineKeyboardButton(text="📢 کانال رسمی", url=CHANNEL_ID, style=ButtonStyle.DANGER), 
@@ -251,25 +251,25 @@ def app_store_keyboard(db, user_id):
     names = db["config"]["panel_config"]["names"]
     
     kb = []
-    fp_text = "✅ پکیج فول VIP" if has_full else f"❌ پکیج فول VIP ({prices.get('full_package', 50)} mAh)"
     
+    # دکمه پکیج فول VIP
     if has_full:
-        kb.append([InlineKeyboardButton(text=fp_text, callback_data="mod_toggle_full_package", style=ButtonStyle.SUCCESS)])
+        kb.append([InlineKeyboardButton(text="پکیج فول VIP", callback_data="mod_toggle_full_package", style=ButtonStyle.SUCCESS)])
     else:
-        kb.append([InlineKeyboardButton(text=fp_text, callback_data="mod_toggle_full_package", style=ButtonStyle.DANGER)])
+        kb.append([InlineKeyboardButton(text=f"پکیج فول VIP ({prices.get('full_package', 50)} mAh)", callback_data="mod_toggle_full_package", style=ButtonStyle.DANGER)])
     
+    # دکمه‌های قابلیت‌ها (حذف ایموجی، سبز برای روشن، قرمز برای خاموش)
     for row in layout:
         row_btns = []
         for key in row:
             if key in ["p_ping", "p_info"]: continue 
             is_on = key in active or has_full
-            icon = "✅" if is_on else "❌"
             cost = prices.get(key, 0)
             
             if is_on:
-                row_btns.append(InlineKeyboardButton(text=f"{icon} {names.get(key, key)} ({cost})", callback_data=f"mod_toggle_{key}", style=ButtonStyle.SUCCESS))
+                row_btns.append(InlineKeyboardButton(text=f"{names.get(key, key)} ({cost})", callback_data=f"mod_toggle_{key}", style=ButtonStyle.SUCCESS))
             else:
-                row_btns.append(InlineKeyboardButton(text=f"{icon} {names.get(key, key)} ({cost})", callback_data=f"mod_toggle_{key}"))
+                row_btns.append(InlineKeyboardButton(text=f"{names.get(key, key)} ({cost})", callback_data=f"mod_toggle_{key}", style=ButtonStyle.DANGER))
         kb.append(row_btns)
         
     kb.append([InlineKeyboardButton(text="✨ ثبت و تایید نهایی تغییرات", callback_data="confirm_app_store_changes", style=ButtonStyle.PRIMARY)])
@@ -326,7 +326,8 @@ async def send_manage_self_menu(db, user_id, callback_query=None):
             kb.append([InlineKeyboardButton(text="🔴 خاموش کردن موقت (توقف مصرف)", callback_data="bot_turn_off", style=ButtonStyle.DANGER)])
             
         kb.append([InlineKeyboardButton(text="🛍 فروشگاه قابلیت‌ها (نصب ماژول)", callback_data="open_app_store", style=ButtonStyle.PRIMARY)])
-        kb.append([InlineKeyboardButton(text="🔄 لاگین مجدد اکانت", callback_data="start_login_flow")])
+        # دکمه لاگین مجدد با رنگ قرمز طبق درخواست
+        kb.append([InlineKeyboardButton(text="🔄 لاگین مجدد اکانت", callback_data="start_login_flow", style=ButtonStyle.DANGER)])
         
     kb.append([InlineKeyboardButton(text="🔙 بازگشت به منوی اصلی", callback_data="menu_main")])
     markup = InlineKeyboardMarkup(inline_keyboard=kb)
@@ -565,8 +566,9 @@ async def query_handler(callback_query: types.CallbackQuery):
 
     elif data == "menu_my_account":
         db = load_db(); u_data = db[str(user_id)]
-        text = f"👤 شناسه: `{user_id}`\n💰 موجودی: `{u_data.get('mah_balance', 0):,}` میلی‌آمپر\n📆 تاریخ عضویت: `{u_data['join_date']}`"
-        await callback_query.answer(text, show_alert=True)
+        text = f"👤 **اطلاعات حساب کاربری شما**\n\n🆔 شناسه: `{user_id}`\n💰 موجودی: `{u_data.get('mah_balance', 0):,}` میلی‌آمپر\n📆 تاریخ عضویت: `{u_data['join_date']}`"
+        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 بازگشت به منوی اصلی", callback_data="menu_main")]])
+        await callback_query.message.edit_text(text, reply_markup=kb)
 
     elif data == "menu_free_test":
         db = load_db(); u_data = db[str(user_id)]; now = get_iran_time(); last_test = u_data.get("last_test_date")
@@ -584,7 +586,29 @@ async def query_handler(callback_query: types.CallbackQuery):
         await callback_query.message.edit_text(info, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 بازگشت", callback_data="menu_main")]]))
 
     elif data == "menu_glass_panel": 
-        await callback_query.answer("🤖 برای باز کردن پنل شیشه‌ای امکانات، در اکانت خود بنویسید:\n👉 .پنل", show_alert=True)
+        # ایجاد پیش‌نمایش (Demo) از پنل شیشه‌ای کاربر
+        db = load_db()
+        layout = db["config"]["panel_config"]["layout"]
+        names = db["config"]["panel_config"]["names"]
+        
+        kb = []
+        for row_idx, row in enumerate(layout):
+            kb_row = []
+            if row_idx % 2 == 0: row_color = ButtonStyle.PRIMARY
+            else: row_color = ButtonStyle.SUCCESS
+            for btn_key in row:
+                kb_row.append(InlineKeyboardButton(text=names.get(btn_key, btn_key), callback_data="demo_alert", style=row_color))
+            kb.append(kb_row)
+            
+        kb.append([InlineKeyboardButton(text="🧮 ماشین حساب", callback_data="demo_alert", style=ButtonStyle.DANGER)])
+        kb.append([InlineKeyboardButton(text="🔙 بازگشت به منوی اصلی", callback_data="menu_main")])
+        
+        demo_markup = InlineKeyboardMarkup(inline_keyboard=kb)
+        text = "👁‍🗨 **پیش‌نمایش پنل شیشه‌ای سلف‌ربات**\n\nاین بخش صرفاً یک دمو (پیش‌نمایش) از پنلی است که روی اکانت شما نصب می‌شود. پس از خرید و لاگین، با ارسال کلمه `.پنل` در چت‌های خودتان، دقیقاً همین منو با قابلیت کلیک کردن برای شما باز خواهد شد تا بتوانید از امکانات استفاده کنید."
+        await callback_query.message.edit_text(text, reply_markup=demo_markup)
+
+    elif data == "demo_alert":
+        await callback_query.answer("⚠️ این یک پیش‌نمایش است! برای استفاده باید سلف را روی اکانت خود فعال کنید.", show_alert=True)
         
     elif data == "menu_admin":
         if user_id != ADMIN_ID: return
@@ -763,7 +787,7 @@ async def finalize_login(user_id, tc, message):
     await message.answer(text, reply_markup=app_store_keyboard(db, user_id), parse_mode="Markdown")
 
 async def main():
-    print("🚀 Master Bot is starting via Aiogram 3 (Fully Inline Menu, Styled Buttons, Advanced DB Sync)...")
+    print("🚀 Master Bot is starting via Aiogram 3 (Stable Styled Buttons)...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
