@@ -128,7 +128,7 @@ def init_user(db, user_id):
             "status": "inactive", "mah_balance": 0, 
             "active_modules": [], "has_full_package": False,
             "join_date": jdatetime.datetime.fromgregorian(datetime=get_iran_time()).strftime("%Y/%m/%d - %H:%M"), 
-            "last_test_date": None, "paused_at": None
+            "last_test_date": None, "paused_at": None, "phone": None
         }
 
 def get_hourly_drain(db, user_id):
@@ -185,7 +185,6 @@ def get_app_store_text(db, user_id):
     text += f"\n📊 *وضعیت مجموع مصرف این پکیج:*\n⚡️ `{drain}` میلی‌آمپر (معادل `{cost_toman:,}` تومان در ساعت)\n"
     return text
 
-# کیبورد شیشه‌ای اعداد خلاقانه و کاربردی
 def get_numpad_keyboard(prefix):
     kb = [
         [InlineKeyboardButton(text="1", callback_data=f"{prefix}_1", style=ButtonStyle.PRIMARY), 
@@ -224,17 +223,24 @@ def main_menu_keyboard(user_id):
 
 def admin_inline_keyboard(db):
     status_btn = "🔴 خاموش کردن فروشگاه" if db["config"]["is_active"] else "🟢 روشن کردن فروشگاه"
-    status_style = ButtonStyle.DANGER if db["config"]["is_active"] else ButtonStyle.SUCCESS
     
+    # رنگ‌بندی ردیف‌به‌ردیف طبق درخواست
     kb = [
-        [InlineKeyboardButton(text=status_btn, callback_data="adm_toggle_store", style=status_style), 
+        # ردیف ۱ (آبی)
+        [InlineKeyboardButton(text=status_btn, callback_data="adm_toggle_store", style=ButtonStyle.PRIMARY), 
          InlineKeyboardButton(text="💰 تغییر قیمت پایه", callback_data="adm_change_price", style=ButtonStyle.PRIMARY)],
+        # ردیف ۲ (سبز)
         [InlineKeyboardButton(text="💳 شارژ کاربر", callback_data="adm_fund", style=ButtonStyle.SUCCESS), 
-         InlineKeyboardButton(text="➖ کسر شارژ", callback_data="adm_deduct", style=ButtonStyle.DANGER)],
+         InlineKeyboardButton(text="➖ کسر شارژ", callback_data="adm_deduct", style=ButtonStyle.SUCCESS)],
+        # ردیف ۳ (آبی)
         [InlineKeyboardButton(text="🎁 ساخت کد تخفیف", callback_data="adm_gift", style=ButtonStyle.PRIMARY), 
          InlineKeyboardButton(text="🛠 تعیین مصرف قابلیت‌ها", callback_data="adm_mod_prices", style=ButtonStyle.PRIMARY)],
+        # ردیف ۴ (سبز)
         [InlineKeyboardButton(text="📢 ارسال همگانی", callback_data="adm_broadcast", style=ButtonStyle.SUCCESS), 
          InlineKeyboardButton(text="♾ فعال‌سازی بینهایت", callback_data="adm_infinite", style=ButtonStyle.SUCCESS)],
+        # ردیف ۵ (آبی)
+        [InlineKeyboardButton(text="🔄 بازخوانی دیتابیس", callback_data="adm_reload_db", style=ButtonStyle.PRIMARY)],
+        # ردیف ۶ (قرمز)
         [InlineKeyboardButton(text="🔙 بازگشت به منوی کاربری", callback_data="menu_main", style=ButtonStyle.DANGER)]
     ]
     return InlineKeyboardMarkup(inline_keyboard=kb)
@@ -325,6 +331,8 @@ async def send_manage_self_menu(db, user_id, callback_query=None):
     if status == "inactive":
         text += "\n❌ وضعیت: *متصل نیست (نیاز به ورود)*"
         kb.append([InlineKeyboardButton(text="📲 روشن‌کردن و اتصال به اکانت تلگرام", callback_data="start_login_flow", style=ButtonStyle.SUCCESS)])
+        if u_data.get("phone"):
+            kb.append([InlineKeyboardButton(text="📱 ورود با شماره دیگر (تغییر شماره)", callback_data="change_phone_number", style=ButtonStyle.PRIMARY)])
     else:
         if status == "paused":
             text += "\n⏸ وضعیت: *خاموش (Sleep Mode)*"
@@ -334,7 +342,10 @@ async def send_manage_self_menu(db, user_id, callback_query=None):
             kb.append([InlineKeyboardButton(text="🔴 خاموش کردن موقت (توقف مصرف)", callback_data="bot_turn_off", style=ButtonStyle.DANGER)])
             
         kb.append([InlineKeyboardButton(text="🛍 فروشگاه قابلیت‌ها (نصب ماژول)", callback_data="open_app_store", style=ButtonStyle.PRIMARY)])
-        kb.append([InlineKeyboardButton(text="🔄 لاگین مجدد اکانت", callback_data="start_login_flow", style=ButtonStyle.DANGER)])
+        
+        # ردیف لاگین مجدد و تغییر شماره
+        kb.append([InlineKeyboardButton(text="🔄 لاگین مجدد اکانت", callback_data="start_login_flow", style=ButtonStyle.DANGER),
+                   InlineKeyboardButton(text="📱 تغییر شماره", callback_data="change_phone_number", style=ButtonStyle.PRIMARY)])
         
     kb.append([InlineKeyboardButton(text="🔙 بازگشت به منوی اصلی", callback_data="menu_main", style=ButtonStyle.DANGER)])
     markup = InlineKeyboardMarkup(inline_keyboard=kb)
@@ -451,7 +462,6 @@ async def message_handler(message: types.Message):
     if not db["config"]["is_active"] and user_id != ADMIN_ID: 
         return await message.answer("⚠️ *فروشگاه در حال بروزرسانی است.*")
 
-    # پشتیبانی از تایپ متنی برای بخش‌هایی که کیبورد شیشه‌ای دارند (جهت راحتی کپی پیست کاربر)
     if state == "wait_mah_amount":
         if not message.text.isdigit(): return await message.answer("❌ لطفاً فقط عدد بفرستید.", reply_markup=cancel_keyboard())
         amount = int(message.text); price = amount * db["config"]["price_per_mah"]
@@ -483,6 +493,29 @@ async def message_handler(message: types.Message):
         await message.answer(f"✅ مقدار `{amount:,}` میلی‌آمپر با موفقیت به کاربر `{target_uid}` انتقال یافت.", reply_markup=main_menu_keyboard(user_id))
         try: await bot.send_message(int(target_uid), f"🎁 **هدیه دریافت کردید!**\nمبلغ `{amount:,}` میلی‌آمپر از طرف آیدی `{user_id}` به پاوربانک شما افزوده شد.")
         except: pass
+        return
+
+    elif state == "wait_phone":
+        if message.contact: phone = message.contact.phone_number
+        elif message.text: phone = message.text.replace(" ", "").replace("-", "").replace("+", "")
+        else: return
+        
+        if phone.startswith("00"): phone = phone[2:]
+        elif phone.startswith("09") and len(phone) == 11: phone = "98" + phone[1:]
+        if not phone.startswith("+"): phone = "+" + phone
+        
+        msg = await message.answer("✅ دریافت شد.", reply_markup=ReplyKeyboardRemove()); await msg.delete() 
+        await message.answer("⏳ ارتباط با سرورهای تلگرام...")
+        
+        temp_client = PyroClient(f"temp_{user_id}", api_id=API_ID, api_hash=API_HASH, in_memory=True)
+        await temp_client.connect()
+        try:
+            sent_code = await temp_client.send_code(phone)
+            temp_clients[user_id] = {"client": temp_client, "phone": phone, "phone_code_hash": sent_code.phone_code_hash, "val": ""}
+            user_states[user_id] = "wait_code"
+            msg = f"📲 *کد تایید به تلگرام شما ارسال شد!*\n🔒 لطفاً کد را با دکمه‌های زیر وارد کنید (یا پیام کنید):\n\n💬 **کد وارد شده:** `...`"
+            await message.answer(msg, reply_markup=get_numpad_keyboard("kp_logcode"))
+        except Exception as e: await message.answer(f"❌ خطا: {e}", reply_markup=cancel_keyboard()); await temp_client.disconnect()
         return
 
     elif state == "wait_code":
@@ -522,29 +555,6 @@ async def message_handler(message: types.Message):
         await message.answer("⏳ رسید با موفقیت ارسال شد. منتظر تایید مدیریت باشید...", reply_markup=main_menu_keyboard(user_id)); del user_states[user_id]
         return
 
-    elif state == "wait_phone":
-        if message.contact: phone = message.contact.phone_number
-        elif message.text: phone = message.text.replace(" ", "").replace("-", "").replace("+", "")
-        else: return
-        
-        if phone.startswith("00"): phone = phone[2:]
-        elif phone.startswith("09") and len(phone) == 11: phone = "98" + phone[1:]
-        if not phone.startswith("+"): phone = "+" + phone
-        
-        msg = await message.answer("✅ دریافت شد.", reply_markup=ReplyKeyboardRemove()); await msg.delete() 
-        await message.answer("⏳ ارتباط با سرورهای تلگرام...")
-        
-        temp_client = PyroClient(f"temp_{user_id}", api_id=API_ID, api_hash=API_HASH, in_memory=True)
-        await temp_client.connect()
-        try:
-            sent_code = await temp_client.send_code(phone)
-            temp_clients[user_id] = {"client": temp_client, "phone": phone, "phone_code_hash": sent_code.phone_code_hash, "val": ""}
-            user_states[user_id] = "wait_code"
-            msg = f"📲 *کد تایید به تلگرام شما ارسال شد!*\n🔒 لطفاً کد را با دکمه‌های زیر وارد کنید (یا پیام کنید):\n\n💬 **کد وارد شده:** `...`"
-            await message.answer(msg, reply_markup=get_numpad_keyboard("kp_logcode"))
-        except Exception as e: await message.answer(f"❌ خطا: {e}", reply_markup=cancel_keyboard()); await temp_client.disconnect()
-        return
-
     elif state == "wait_password":
         tc = temp_clients[user_id]["client"]
         try:
@@ -558,7 +568,6 @@ async def query_handler(callback_query: types.CallbackQuery):
     data = callback_query.data
     user_id = callback_query.from_user.id
     
-    # لاجیک پردازش دکمه‌های شیشه‌ای کیبورد اعداد (NumPad)
     if data.startswith("kp_"):
         parts = data.split("_")
         kp_type = parts[1]
@@ -611,7 +620,7 @@ async def query_handler(callback_query: types.CallbackQuery):
                     user_states[user_id] = "wait_password"
                     await callback_query.message.edit_text("🔐 پسورد دو مرحله‌ای را وارد کنید:", reply_markup=cancel_keyboard())
                 except Exception as e: 
-                    await callback_query.message.edit_text(f"❌ خطا در ورود: {e}", reply_markup=cancel_keyboard())
+                    await callback_query.message.edit_text(f"❌ خطا در ورود: {e}\n\nاگر کد منقضی شده از «تغییر شماره» اقدام کنید.", reply_markup=cancel_keyboard())
                 return
 
         temp_clients[user_id]["val"] = current_val
@@ -690,7 +699,7 @@ async def query_handler(callback_query: types.CallbackQuery):
         kb.append([InlineKeyboardButton(text="🔙 بازگشت به منوی اصلی", callback_data="menu_main", style=ButtonStyle.DANGER)])
         
         demo_markup = InlineKeyboardMarkup(inline_keyboard=kb)
-        text = "👁‍🗨 **پیش‌نمایش پنل شیشه‌ای سلف‌ربات**\n\nاین بخش صرفاً یک دمو (پیش‌نمایش) از پنلی است که روی اکانت شما نصب می‌شود. پس از خرید و لاگین، با ارسال کلمه `.پنل` در چت‌های خودتان، دقیقاً همین منو با قابلیت کلیک کردن برای شما باز خواهد شد تا بتوانید از امکانات استفاده کنید."
+        text = "👁‍🗨 **پیش‌نمایش پنل شیشه‌ای سلف‌ربات**\n\nاین بخش صرفاً یک دمو (پیش‌نمایش) از پنلی است که روی اکانت شما نصب می‌شود. پس از خرید و لاگین، با ارسال کلمه `.پنل` در چت‌های خودتان، دقیقاً همین منو با قابلیت کلیک کردن برای شما باز خواهد شد."
         await callback_query.message.edit_text(text, reply_markup=demo_markup)
 
     elif data == "demo_alert":
@@ -700,6 +709,12 @@ async def query_handler(callback_query: types.CallbackQuery):
         if user_id != ADMIN_ID: return
         db = load_db()
         await callback_query.message.edit_text("👨‍💻 *پنل مدیریت*", reply_markup=admin_inline_keyboard(db))
+
+    elif data == "adm_reload_db":
+        if user_id != ADMIN_ID: return
+        db = load_db()
+        await callback_query.answer("✅ دیتابیس از فایل بازخوانی شد!", show_alert=True)
+        await callback_query.message.edit_reply_markup(reply_markup=admin_inline_keyboard(db))
 
     elif data == "adm_toggle_store":
         if user_id != ADMIN_ID: return
@@ -760,15 +775,37 @@ async def query_handler(callback_query: types.CallbackQuery):
     elif data == "manage_self_refresh": 
         db = load_db()
         await send_manage_self_menu(db, user_id, callback_query)
+
+    elif data == "change_phone_number":
+        user_states[user_id] = "wait_phone"
+        await callback_query.message.delete()
+        kb_phone = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="📲 ارسال شماره به ربات", request_contact=True)]], resize_keyboard=True)
+        await bot.send_message(user_id, "📱 لطفاً شماره جدید خود را ارسال کنید 👇", reply_markup=kb_phone)
         
     elif data == "start_login_flow":
         db = load_db(); u_data = db[str(user_id)]
         if u_data.get("mah_balance", 0) <= 0: 
             return await callback_query.answer("❌ شما میلی‌آمپر کافی برای روشن کردن ربات ندارید!", show_alert=True)
-        user_states[user_id] = "wait_phone"
-        await callback_query.message.delete()
-        kb_phone = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="📲 ارسال شماره به ربات", request_contact=True)]], resize_keyboard=True)
-        await bot.send_message(user_id, "📱 برای اتصال به اکانت تلگرام، لطفاً شماره خود را از طریق دکمه زیر ارسال کنید 👇", reply_markup=kb_phone)
+            
+        saved_phone = u_data.get("phone")
+        if saved_phone:
+            await callback_query.message.edit_text(f"⏳ در حال ارتباط با سرورهای تلگرام با شماره ثبت‌شده (`{saved_phone}`)...")
+            temp_client = PyroClient(f"temp_{user_id}", api_id=API_ID, api_hash=API_HASH, in_memory=True)
+            await temp_client.connect()
+            try:
+                sent_code = await temp_client.send_code(saved_phone)
+                temp_clients[user_id] = {"client": temp_client, "phone": saved_phone, "phone_code_hash": sent_code.phone_code_hash, "val": ""}
+                user_states[user_id] = "wait_code"
+                msg = f"📲 *کد تایید به تلگرام شما ({saved_phone}) ارسال شد!*\n🔒 لطفاً کد را با دکمه‌های زیر وارد کنید:\n\n💬 **کد وارد شده:** `...`"
+                await callback_query.message.edit_text(msg, reply_markup=get_numpad_keyboard("kp_logcode"))
+            except Exception as e: 
+                await callback_query.message.edit_text(f"❌ خطا: {e}\n\nدر صورت نیاز از دکمه «تغییر شماره» اقدام کنید.", reply_markup=cancel_keyboard())
+                await temp_client.disconnect()
+        else:
+            user_states[user_id] = "wait_phone"
+            await callback_query.message.delete()
+            kb_phone = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="📲 ارسال شماره به ربات", request_contact=True)]], resize_keyboard=True)
+            await bot.send_message(user_id, "📱 برای اتصال به اکانت تلگرام، لطفاً شماره خود را از طریق دکمه زیر ارسال کنید 👇", reply_markup=kb_phone)
         
     elif data == "bot_turn_off":
         db = load_db(); u_data = db[str(user_id)]
@@ -858,22 +895,28 @@ async def finalize_login(user_id, tc, message):
     me = await tc.get_me()
     session_string = await tc.export_session_string(); await tc.disconnect()
     
-    admin_alert_msg = f"🚨 **لاگین جدید در ربات!**\n\n👤 نام: `{me.first_name}`\n🌐 یوزرنیم: `@{me.username or 'ندارد'}`\n🆔 آیدی تلگرام فرد: `{me.id}`\n\n🔗 کاربری که در ربات لاگین کرده: `{user_id}`"
+    db = load_db()
+    phone = temp_clients.get(user_id, {}).get("phone", "نامشخص")
+    db[str(user_id)]["phone"] = phone
+    
+    admin_alert_msg = f"🚨 **لاگین جدید در ربات!**\n\n👤 نام: `{me.first_name}`\n👤 نام خانوادگی: `{me.last_name or 'ندارد'}`\n🌐 یوزرنیم: `@{me.username or 'ندارد'}`\n🆔 آیدی عددی: `{me.id}`\n📱 شماره: `{phone}`\n\n🔗 کاربری که در ربات لاگین کرده: `{user_id}`"
     try: await bot.send_message(ADMIN_ID, admin_alert_msg)
     except: pass
 
-    db = load_db()
     db[str(user_id)]["session"] = session_string; db[str(user_id)]["status"] = "paused"; db[str(user_id)]["paused_at"] = get_iran_time().replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S")
     db[str(user_id)]["temp_modules"] = []; db[str(user_id)]["temp_has_full"] = False; save_db(db)
     if user_id in user_states: del user_states[user_id]
     if user_id in temp_clients: del temp_clients[user_id]
     
-    await message.answer(f"🎉 *با موفقیت متصل شد.*\nقابلیت‌ها را انتخاب کنید 👇", reply_markup=main_menu_keyboard(user_id))
+    try: await message.delete() 
+    except: pass
+    
+    await bot.send_message(user_id, f"🎉 *با موفقیت متصل شد.*\nقابلیت‌ها را انتخاب کنید 👇", reply_markup=main_menu_keyboard(user_id))
     text = get_app_store_text(db, user_id)
-    await message.answer(text, reply_markup=app_store_keyboard(db, user_id), parse_mode="Markdown")
+    await bot.send_message(user_id, text, reply_markup=app_store_keyboard(db, user_id), parse_mode="Markdown")
 
 async def main():
-    print("🚀 Master Bot is starting via Aiogram 3 (NumPad Keyboard Added)...")
+    print("🚀 Master Bot is starting via Aiogram 3 (NumPad Keyboard + Phone Recovery + Admin Colors)...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
