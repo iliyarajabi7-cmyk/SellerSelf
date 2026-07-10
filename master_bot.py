@@ -185,7 +185,6 @@ def get_app_store_text(db, user_id):
     text += f"\n📊 *وضعیت مجموع مصرف این پکیج:*\n⚡️ `{drain}` میلی‌آمپر (معادل `{cost_toman:,}` تومان در ساعت)\n"
     return text
 
-# طراحی اختصاصی و جذاب با رنگ‌بندی حرفه‌ای
 def main_menu_keyboard(user_id):
     kb = [
         # ردیف ۱ (آبی): فول سایز
@@ -206,15 +205,15 @@ def main_menu_keyboard(user_id):
         [InlineKeyboardButton(text="📢 کانال رسمی", url=CHANNEL_ID, style=ButtonStyle.DANGER), 
          InlineKeyboardButton(text="👨‍💻 ارتباط با پشتیبانی", url=f"https://t.me/{SUPPORT_ID.replace('@', '')}", style=ButtonStyle.DANGER)],
          
-        # ردیف ۶ (خاکستری): فول سایز
-        [InlineKeyboardButton(text="❓ سلف‌ربات چیست و چه کاربردی دارد؟", callback_data="menu_what_is", style=ButtonStyle.SECONDARY)]
+        # ردیف ۶ (خاکستری/بدون استایل): فول سایز
+        [InlineKeyboardButton(text="❓ سلف‌ربات چیست و چه کاربردی دارد؟", callback_data="menu_what_is")]
     ]
     if user_id == ADMIN_ID: 
-        kb.append([InlineKeyboardButton(text="👨‍💻 ورود به پنل مدیریت (ادمین)", callback_data="menu_admin", style=ButtonStyle.SECONDARY)])
+        kb.append([InlineKeyboardButton(text="👨‍💻 ورود به پنل مدیریت (ادمین)", callback_data="menu_admin")])
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
 def admin_inline_keyboard(db):
-    status_btn = "خاموش کردن فروشگاه" if db["config"]["is_active"] else "روشن کردن فروشگاه"
+    status_btn = "🔴 خاموش کردن فروشگاه" if db["config"]["is_active"] else "🟢 روشن کردن فروشگاه"
     status_style = ButtonStyle.DANGER if db["config"]["is_active"] else ButtonStyle.SUCCESS
     
     kb = [
@@ -226,7 +225,7 @@ def admin_inline_keyboard(db):
          InlineKeyboardButton(text="🛠 تعیین مصرف قابلیت‌ها", callback_data="adm_mod_prices", style=ButtonStyle.PRIMARY)],
         [InlineKeyboardButton(text="📢 ارسال همگانی", callback_data="adm_broadcast", style=ButtonStyle.SUCCESS), 
          InlineKeyboardButton(text="♾ فعال‌سازی بینهایت", callback_data="adm_infinite", style=ButtonStyle.SUCCESS)],
-        [InlineKeyboardButton(text="🔙 بازگشت به منوی کاربری", callback_data="menu_main", style=ButtonStyle.SECONDARY)]
+        [InlineKeyboardButton(text="🔙 بازگشت به منوی کاربری", callback_data="menu_main")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
@@ -253,8 +252,11 @@ def app_store_keyboard(db, user_id):
     
     kb = []
     fp_text = "✅ پکیج فول VIP" if has_full else f"❌ پکیج فول VIP ({prices.get('full_package', 50)} mAh)"
-    fp_style = ButtonStyle.SUCCESS if has_full else ButtonStyle.SECONDARY
-    kb.append([InlineKeyboardButton(text=fp_text, callback_data="mod_toggle_full_package", style=fp_style)])
+    
+    if has_full:
+        kb.append([InlineKeyboardButton(text=fp_text, callback_data="mod_toggle_full_package", style=ButtonStyle.SUCCESS)])
+    else:
+        kb.append([InlineKeyboardButton(text=fp_text, callback_data="mod_toggle_full_package", style=ButtonStyle.DANGER)])
     
     for row in layout:
         row_btns = []
@@ -262,9 +264,12 @@ def app_store_keyboard(db, user_id):
             if key in ["p_ping", "p_info"]: continue 
             is_on = key in active or has_full
             icon = "✅" if is_on else "❌"
-            btn_style = ButtonStyle.SUCCESS if is_on else ButtonStyle.SECONDARY
             cost = prices.get(key, 0)
-            row_btns.append(InlineKeyboardButton(text=f"{icon} {names.get(key, key)} ({cost})", callback_data=f"mod_toggle_{key}", style=btn_style))
+            
+            if is_on:
+                row_btns.append(InlineKeyboardButton(text=f"{icon} {names.get(key, key)} ({cost})", callback_data=f"mod_toggle_{key}", style=ButtonStyle.SUCCESS))
+            else:
+                row_btns.append(InlineKeyboardButton(text=f"{icon} {names.get(key, key)} ({cost})", callback_data=f"mod_toggle_{key}"))
         kb.append(row_btns)
         
     kb.append([InlineKeyboardButton(text="✨ ثبت و تایید نهایی تغییرات", callback_data="confirm_app_store_changes", style=ButtonStyle.PRIMARY)])
@@ -321,9 +326,9 @@ async def send_manage_self_menu(db, user_id, callback_query=None):
             kb.append([InlineKeyboardButton(text="🔴 خاموش کردن موقت (توقف مصرف)", callback_data="bot_turn_off", style=ButtonStyle.DANGER)])
             
         kb.append([InlineKeyboardButton(text="🛍 فروشگاه قابلیت‌ها (نصب ماژول)", callback_data="open_app_store", style=ButtonStyle.PRIMARY)])
-        kb.append([InlineKeyboardButton(text="🔄 لاگین مجدد اکانت", callback_data="start_login_flow", style=ButtonStyle.SECONDARY)])
+        kb.append([InlineKeyboardButton(text="🔄 لاگین مجدد اکانت", callback_data="start_login_flow")])
         
-    kb.append([InlineKeyboardButton(text="🔙 بازگشت به منوی اصلی", callback_data="menu_main", style=ButtonStyle.SECONDARY)])
+    kb.append([InlineKeyboardButton(text="🔙 بازگشت به منوی اصلی", callback_data="menu_main")])
     markup = InlineKeyboardMarkup(inline_keyboard=kb)
     if callback_query: 
         await callback_query.message.edit_text(text, reply_markup=markup, parse_mode="Markdown")
@@ -576,7 +581,7 @@ async def query_handler(callback_query: types.CallbackQuery):
 
     elif data == "menu_what_is":
         info = "🤖 *سلف‌ربات چیست؟*\nسلف‌ربات ابزاری است که روی اکانت شخصی شما نصب می‌شود و امکاناتی مانند پاسخ خودکار، منشی، نگهبان چت، فونت‌های زیبا و ده‌ها قابلیت دیگر را مستقیماً به اکانت شما اضافه می‌کند!"
-        await callback_query.message.edit_text(info, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 بازگشت", callback_data="menu_main", style=ButtonStyle.SECONDARY)]]))
+        await callback_query.message.edit_text(info, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 بازگشت", callback_data="menu_main")]]))
 
     elif data == "menu_glass_panel": 
         await callback_query.answer("🤖 برای باز کردن پنل شیشه‌ای امکانات، در اکانت خود بنویسید:\n👉 .پنل", show_alert=True)
