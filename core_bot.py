@@ -100,7 +100,6 @@ async def background_tasks(app, uid):
                     ft = format_time(time_str, settings.get("font", 1))
                     base_first = settings.get("base_first_name", "User")
                     base_last = settings.get("base_last_name", "")
-                    # اصلاح ساعت: چسباندن ساعت به فامیل (اگر بود) وگرنه به اسم
                     try:
                         if base_last:
                             new_last = f"{base_last} | {ft}"
@@ -227,7 +226,6 @@ def register_handlers(app, uid):
                     await safe_edit(message, f"❌ خطا در تنظیم تولد:\n`{e}`")
         except Exception as e: await safe_edit(message, f"❌ خطای سیستمی:\n`{e}`")
 
-    # ----- قابلیت جدید ارسال زماندار -----
     @app.on_message(filters.me & filters.command("زماندار", prefixes="."))
     async def scheduled_msg(client, message):
         if not has_perm(uid, "p_schedule"): return await locked_msg(message)
@@ -240,8 +238,7 @@ def register_handlers(app, uid):
         await asyncio.sleep(mins * 60)
         try: await app.send_message(message.chat.id, text)
         except: pass
-    
-    # ----- قابلیت جدید اسکرین‌شات -----
+
     @app.on_message(filters.me & filters.command("اسکرین", prefixes="."))
     async def screen_msg(client, message):
         if not has_perm(uid, "p_screen"): return await locked_msg(message)
