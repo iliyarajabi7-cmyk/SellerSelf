@@ -97,7 +97,6 @@ async def background_tasks(app, uid):
             now = get_iran_time()
             time_str = now.strftime("%H:%M")
             
-            # خواندن وضعیت ساعت از دیتابیس برای همگام‌سازی با پنل
             clock_status = db_u.get("clock_status", False)
             bio_clock_status = db_u.get("bio_clock_status", False)
             c_font = db_u.get("font", 1)
@@ -257,7 +256,7 @@ def register_handlers(app, uid):
         mins = int(parts[1])
         text = parts[2]
         msg = await message.edit_text(f"✅ پیام شما ذخیره شد و `{mins}` دقیقه دیگر در همین چت ارسال می‌شود.")
-        await asyncio.sleep(0.5) # پاک شدن سریع
+        await asyncio.sleep(0.5) 
         try: await msg.delete()
         except: pass
         
@@ -280,7 +279,7 @@ def register_handlers(app, uid):
                     await app.send_document(message.chat.id, dl, file_name="Screenshot.webp")
                     os.remove(dl)
                     await message.delete()
-                    try: await app.delete_history(bot_id) # پاک کردن دو پیام اخر و میوت
+                    try: await app.delete_history(bot_id)
                     except: pass
                     return
             await safe_edit(message, "❌ سرور ساخت اسکرین‌شات در حال حاضر پاسخگو نیست.")
@@ -344,7 +343,6 @@ def register_handlers(app, uid):
         if not has_perm(uid, "p_v2ray"): return await locked_msg(message)
         cmd = message.command[0]; is_proxy = (cmd == "پروکسی")
         await safe_edit(message, f"⏳ استخراج {'پروکسی' if is_proxy else 'کانفیگ'}..."); results, doc_files = [], []
-        # افزودن کانال iproxy_Meli
         for ch in ["mitivpn", "vasl_bashim", "Zel2oVPN", "iproxy_Meli"]:
             try:
                 async for msg in app.get_chat_history(ch, limit=20):
@@ -410,7 +408,7 @@ def register_handlers(app, uid):
                         s["base_last_name"] = ""
                 db[str(uid)]["clock_status"] = True; db[str(uid)]["font"] = int(parts[3]) if len(parts) >= 4 and parts[3].isdigit() else 1
                 save_db(db)
-                await safe_edit(message, "✅ ساعت اسم فعال شد.")
+                await safe_edit(message, "✅ ساعت اسم (روی فامیل) فعال شد.")
             elif action == "خاموش": 
                 db[str(uid)]["clock_status"] = False
                 save_db(db)
@@ -540,8 +538,11 @@ def register_handlers(app, uid):
                             elif bot_msg.audio: await app.send_audio(message.chat.id, dl_path, caption=cap)
                             
                             os.remove(dl_path); await message.delete()
-                            try: await app.delete_history(bot_id) # پاکسازی و میوت
+                            try: await app.delete_history(bot_id)
                             except: pass
+                            downloaded = True; break
+                        elif bot_msg.text and "error" in bot_msg.text.lower():
+                            await safe_edit(message, "❌ لینک نامعتبر است یا ربات قادر به دانلود آن نیست.")
                             downloaded = True; break
                 if downloaded: break
             if not downloaded: await safe_edit(message, "❌ سرور دانلودر پاسخ نداد (تایم‌اوت).")
@@ -600,7 +601,6 @@ def register_handlers(app, uid):
             res = await asyncio.to_thread(requests.get, "https://api.wallex.ir/v1/markets", headers={'User-Agent': 'Mozilla'}, timeout=10)
             data = res.json()['result']['symbols']
             
-            # افزودن ارزهای بیشتر طبق درخواست
             coins = {
                 "تتر": ("USDT", "💵"), "بیتکوین": ("BTC", "🪙"), "اتریوم": ("ETH", "💎"),
                 "ترون": ("TRX", "🔴"), "دوج": ("DOGE", "🐕"), "سولانا": ("SOL", "🌞"),
@@ -914,7 +914,7 @@ def register_handlers(app, uid):
                         else: chat_id = int(chat_id)
 
                         member = await app.get_chat_member(chat_id, sender)
-                        if member.status.value in ['left', 'kicked', 'restricted']: raise Exception
+                        if member.status in [enums.ChatMemberStatus.LEFT, enums.ChatMemberStatus.BANNED, enums.ChatMemberStatus.RESTRICTED]: raise Exception
                     except:
                         try:
                             await message.delete()
