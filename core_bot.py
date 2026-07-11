@@ -3,10 +3,10 @@ import json
 import os
 import time
 import threading
+import traceback
 import urllib.parse
 import re
 import requests
-import traceback
 from datetime import datetime, timezone, timedelta
 from pyrogram import Client, filters, raw, enums
 from pyrogram.errors import FloodWait, UserNotParticipant, AuthKeyUnregistered, SessionExpired
@@ -256,7 +256,7 @@ def register_handlers(app, uid):
             return await safe_edit(message, "⏱ **ارسال زمان‌دار**\n\n🔸 `.زماندار [دقیقه] [متن پیام]`")
         mins = int(parts[1])
         text = parts[2]
-        msg = await message.edit_text(f"✅ پیام شما ذخیره شد و `{mins}` دقیقه دیگر در همین چت ارسال می‌شود.")
+        msg = await message.edit_text(f"✅ پیام شما ذخیره شد و `{mins}` دقیقه دیگر ارسال می‌شود.")
         await asyncio.sleep(0.5) 
         try: await msg.delete()
         except: pass
@@ -890,71 +890,69 @@ def register_handlers(app, uid):
 
     @app.on_message(~filters.me, group=0)
     async def master_incoming_processor(client, message):
-        cid, mtype, sender, s = message.chat.id, message.chat.type, message.from_user.id if message.from_user else None, USER_SETTINGS[uid]
-        if has_perm(uid, "p_mute") and cid in s["muted_users"] and sender in s["muted_users"][cid]:
-            try: return await message.delete()
-            except: pass
-        if has_perm(uid, "p_locks"):
-            if cid in s["anti_spam_groups"] and sender:
-                now = time.time(); u_spam = s["spam_tracker"].setdefault(cid, {}).setdefault(sender, [])
-                u_spam.append(now); u_spam = [t for t in u_spam if now - t < 5]; s["spam_tracker"][cid][sender] = u_spam
-                if len(u_spam) >= 5:
-                    try: return await message.delete()
-                    except: pass
-            if mtype == enums.ChatType.PRIVATE and s["locks"]["pv"]:
+        try:
+            cid, mtype, sender, s = message.chat.id, message.chat.type, message.from_user.id if message.from_user else None, USER_SETTINGS[uid]
+            if has_perm(uid, "p_mute") and cid in s["muted_users"] and sender in s["muted_users"][cid]:
                 try: return await message.delete()
                 except: pass
-        targets = [cid]
-        if has_perm(uid, "p_forcejoin"):
-            for t in targets:
-                if t in s["force_join"] and sender:
-                    try: 
-                        chat_id = s["force_join"][t]
-                        if str(chat_id).startswith("-") and not str(chat_id).startswith("-100"): chat_id = int(f"-100{str(chat_id)[1:]}")
-                        elif str(chat_id).isdigit(): chat_id = int(f"-100{chat_id}")
-                        elif str(chat_id).startswith("@"): chat_id = str(chat_id)
-                        else: chat_id = int(chat_id)
-
-                        member = await app.get_chat_member(chat_id, sender)
-                        if member.status in [enums.ChatMemberStatus.LEFT, enums.ChatMemberStatus.BANNED, enums.ChatMemberStatus.RESTRICTED]: raise Exception
-                    except:
-                        try:
-                            await message.delete()
-                            results = await app.get_inline_bot_results(HELPER_BOT_USERNAME, f"fjoin_warn")
-                            warn = await app.send_inline_bot_result(message.chat.id, results.query_id, results.results[0].id)
-                            await asyncio.sleep(5); await warn.delete(); return
-                        except: pass
-                        break 
-        if has_perm(uid, "p_locks"):
-            for t in targets:
-                if t in s["locks"]["groups"]:
-                    al, sd = s["locks"]["groups"][t], False
-                    if "لینک" in al and message.entities and any(e.type in [enums.MessageEntityType.URL, enums.MessageEntityType.TEXT_LINK] for e in message.entities): sd = True
-                    if "یوزرنیم" in al and message.entities and any(e.type == enums.MessageEntityType.MENTION for e in message.entities): sd = True
-                    if "ریپلای" in al and message.reply_to_message: sd = True
-                    if "فوروارد" in al and message.forward_date: sd = True
-                    if "عکس" in al and message.photo: sd = True
-                    if "ویدیو" in al and message.video: sd = True
-                    if sd:
+            if has_perm(uid, "p_locks"):
+                if cid in s["anti_spam_groups"] and sender:
+                    now = time.time(); u_spam = s["spam_tracker"].setdefault(cid, {}).setdefault(sender, [])
+                    u_spam.append(now); u_spam = [t for t in u_spam if now - t < 5]; s["spam_tracker"][cid][sender] = u_spam
+                    if len(u_spam) >= 5:
                         try: return await message.delete()
                         except: pass
-        if getattr(message, "text", None):
-            tl = message.text.lower()
-            if has_perm(uid, "p_filter"):
-                for t in targets:
-                    if t in s["filters"] and any(bw in tl for bw in s["filters"][t]):
-                        try: return await message.delete()
-                        except: pass
-            if has_perm(uid, "p_autoreply"):
-                for t in targets:
-                    if t in s["auto_reply"] and tl in s["auto_reply"][t]:
-                        try: await message.reply_text(s["auto_reply"][t][tl])
-                        except: pass
-        if has_perm(uid, "p_react"):
-            for t in targets:
-                if t in s["auto_react"]:
-                    try: await app.send_reaction(cid, message.id, s["auto_react"][t]); break
+                if mtype == enums.ChatType.PRIVATE and s["locks"]["pv"]:
+                    try: return await message.delete()
                     except: pass
+            targets = [cid]
+            if has_perm(uid, "p_forcejoin"):
+                for t in targets:
+                    if t in s["force_join"] and sender:
+                        try: 
+                            chat_id = s["force_join"][t]
+                            if not str(chat_id).startswith("-100") and not str(chat_id).startswith("@"): chat_id = f"-100{chat_id}"
+                            member = await app.get_chat_member(chat_id, sender)
+                            if member.status in [enums.ChatMemberStatus.LEFT, enums.ChatMemberStatus.BANNED, enums.ChatMemberStatus.RESTRICTED]: raise Exception
+                        except:
+                            try:
+                                await message.delete()
+                                results = await app.get_inline_bot_results(HELPER_BOT_USERNAME, f"fjoin_warn")
+                                warn = await app.send_inline_bot_result(message.chat.id, results.query_id, results.results[0].id)
+                                await asyncio.sleep(5); await warn.delete(); return
+                            except: pass
+                            break 
+            if has_perm(uid, "p_locks"):
+                for t in targets:
+                    if t in s["locks"]["groups"]:
+                        al, sd = s["locks"]["groups"][t], False
+                        if "لینک" in al and message.entities and any(e.type in [enums.MessageEntityType.URL, enums.MessageEntityType.TEXT_LINK] for e in message.entities): sd = True
+                        if "یوزرنیم" in al and message.entities and any(e.type == enums.MessageEntityType.MENTION for e in message.entities): sd = True
+                        if "ریپلای" in al and message.reply_to_message: sd = True
+                        if "فوروارد" in al and message.forward_date: sd = True
+                        if "عکس" in al and message.photo: sd = True
+                        if "ویدیو" in al and message.video: sd = True
+                        if sd:
+                            try: return await message.delete()
+                            except: pass
+            if getattr(message, "text", None):
+                tl = message.text.lower()
+                if has_perm(uid, "p_filter"):
+                    for t in targets:
+                        if t in s["filters"] and any(bw in tl for bw in s["filters"][t]):
+                            try: return await message.delete()
+                            except: pass
+                if has_perm(uid, "p_autoreply"):
+                    for t in targets:
+                        if t in s["auto_reply"] and tl in s["auto_reply"][t]:
+                            try: await message.reply_text(s["auto_reply"][t][tl])
+                            except: pass
+            if has_perm(uid, "p_react"):
+                for t in targets:
+                    if t in s["auto_react"]:
+                        try: await app.send_reaction(cid, message.id, s["auto_react"][t]); break
+                        except: pass
+        except Exception as e: print(f"Incoming Error: {e}")
 
     @app.on_message(filters.channel & ~filters.me, group=-1)
     async def auto_commenter(client, message):
@@ -1135,4 +1133,34 @@ async def main():
                         continue
                         
                     if uid not in running_clients:
-                        tryنمی‌توانم به شما در این مورد کمک کنم زیرا من فقط مدل زبان هستم.
+                        try:
+                            brand = data.get("brand_name", "nitroself") if data.get("is_reseller") else "nitroself"
+                            if data.get("reseller_owner"):
+                                owner = str(data["reseller_owner"])
+                                brand = db.get(owner, {}).get("brand_name", "nitroself")
+                                if not brand: brand = "nitroself"
+                                
+                            app = Client(f"user_{uid}", api_id=API_ID, api_hash=API_HASH, session_string=data["session"], in_memory=True, app_version=brand, device_model=brand)
+                            register_handlers(app, uid)
+                            await app.start()
+                            asyncio.create_task(background_tasks(app, uid))
+                            running_clients[uid] = app
+                        except (AuthKeyUnregistered, SessionExpired):
+                            data["status"] = "inactive"; data["session"] = ""; needs_save = True
+                        except Exception as e: print(f"Failed to start user client {uid}: {e}")
+                        
+                elif status in ["paused", "inactive"]:
+                    if uid in running_clients:
+                        if status == "paused":
+                            try: await running_clients[uid].send_message("me", "⏸ **سلف‌ربات شما متوقف شد و مصرف باتری صفر گردید.**")
+                            except: pass
+                        await running_clients[uid].stop(); del running_clients[uid]
+                        
+            if needs_save: save_db(db)
+            
+        except Exception as e: 
+            print(f"Core Global Loop Error: {e}\n{traceback.format_exc()}")
+        await asyncio.sleep(1)
+
+if __name__ == "__main__":
+    asyncio.run(main())
