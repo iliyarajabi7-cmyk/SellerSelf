@@ -91,13 +91,21 @@ async def background_tasks(app, uid):
             await asyncio.sleep(1); continue
             
         try:
+            db = load_db()
+            db_u = db.get(str(uid), {})
             settings = USER_SETTINGS.get(uid, {})
             now = get_iran_time()
             time_str = now.strftime("%H:%M")
             
-            if settings.get("clock_status") and has_perm(uid, "p_clock"):
+            # خواندن وضعیت ساعت از دیتابیس برای همگام‌سازی با پنل
+            clock_status = db_u.get("clock_status", False)
+            bio_clock_status = db_u.get("bio_clock_status", False)
+            c_font = db_u.get("font", 1)
+            b_font = db_u.get("bio_font", 1)
+            
+            if clock_status and has_perm(uid, "p_clock"):
                 if time_str != last_clock_time:
-                    ft = format_time(time_str, settings.get("font", 1))
+                    ft = format_time(time_str, c_font)
                     base_first = settings.get("base_first_name", "User")
                     base_last = settings.get("base_last_name", "")
                     try:
@@ -111,9 +119,9 @@ async def background_tasks(app, uid):
                     except FloodWait as e: await asyncio.sleep(e.value + 2)
                     except: pass
 
-            if settings.get("bio_clock_status") and has_perm(uid, "p_clock"):
+            if bio_clock_status and has_perm(uid, "p_clock"):
                 if time_str != last_bio_time:
-                    ft = format_time(time_str, settings.get("bio_font", 1))
+                    ft = format_time(time_str, b_font)
                     bio = settings.get("base_bio", "")
                     try: await app.update_profile(bio=(f"{bio} | {ft}" if bio else ft)[:70]); last_bio_time = time_str
                     except FloodWait as e: await asyncio.sleep(e.value + 2)
@@ -142,7 +150,7 @@ async def background_tasks(app, uid):
 def register_handlers(app, uid):
     if uid not in USER_SETTINGS:
         USER_SETTINGS[uid] = {
-            "clock_status": False, "base_first_name": "", "base_last_name": "", "font": 1, "bio_clock_status": False, "base_bio": "", "bio_font": 1,
+            "base_first_name": "", "base_last_name": "", "base_bio": "",
             "tabchi_status": False, "tabchi_text": "", "tabchi_targets": set(), "tabchi_interval": 30, "last_tabchi": 0,
             "auto_clear_chats": {}, "anti_spam_groups": set(), "spam_tracker": {},
             "guardian": {
@@ -176,6 +184,20 @@ def register_handlers(app, uid):
             if not results.results: return await safe_edit(message, f"❌ ربات پنل (`{HELPER_BOT_USERNAME}`) پاسخ نداد!\nمطمئن شوید Inline Mode در BotFather روشن است.")
             await app.send_inline_bot_result(message.chat.id, results.query_id, results.results[0].id); await message.delete()
         except Exception as e: await safe_edit(message, f"⚠️ **خطا:**\n`{e}`\n\n💡 یوزرنیم ربات پنل را بررسی کنید.")
+
+    @app.on_message(filters.me & filters.command("انقضا", prefixes="."))
+    async def expire_cmd(client, message):
+        db = load_db()
+        u = db.get(str(uid), {})
+        mah = u.get("mah_balance", 0)
+        drain = get_hourly_drain(db, str(uid))
+        if drain == 0: rem = "مصرف شما صفر است (نامحدود)"
+        else:
+            hours = mah / drain
+            days = int(hours // 24)
+            r_h = int(hours % 24)
+            rem = f"{days} روز و {r_h} ساعت"
+        await safe_edit(message, f"🔋 **وضعیت حساب سلف‌ربات شما:**\n\n💰 موجودی: `{mah:,}` میلی‌آمپر\n⚡️ مصرف فعلی: `{drain}` در ساعت\n⏱ زمان باقیمانده: **{rem}**")
 
     @app.on_message(filters.me & filters.command("پروفایل", prefixes="."))
     async def profile_manager_cmd(client, message):
@@ -235,11 +257,11 @@ def register_handlers(app, uid):
         mins = int(parts[1])
         text = parts[2]
         msg = await message.edit_text(f"✅ پیام شما ذخیره شد و `{mins}` دقیقه دیگر در همین چت ارسال می‌شود.")
-        await asyncio.sleep(2)
+        await asyncio.sleep(0.5) # پاک شدن سریع
         try: await msg.delete()
         except: pass
         
-        await asyncio.sleep((mins * 60) - 2)
+        await asyncio.sleep((mins * 60) - 0.5)
         try: await app.send_message(message.chat.id, text)
         except: pass
 
@@ -253,11 +275,13 @@ def register_handlers(app, uid):
             fwd = await message.reply_to_message.forward(bot_id)
             await asyncio.sleep(2)
             async for bot_msg in app.get_chat_history(bot_id, limit=3):
-                if bot_msg.sticker or bot_msg.photo or bot_msg.document:
+                if bot_msg.id > fwd.id and (bot_msg.sticker or bot_msg.photo or bot_msg.document):
                     dl = await bot_msg.download()
                     await app.send_document(message.chat.id, dl, file_name="Screenshot.webp")
                     os.remove(dl)
                     await message.delete()
+                    try: await app.delete_history(bot_id) # پاک کردن دو پیام اخر و میوت
+                    except: pass
                     return
             await safe_edit(message, "❌ سرور ساخت اسکرین‌شات در حال حاضر پاسخگو نیست.")
         except Exception as e:
@@ -320,7 +344,8 @@ def register_handlers(app, uid):
         if not has_perm(uid, "p_v2ray"): return await locked_msg(message)
         cmd = message.command[0]; is_proxy = (cmd == "پروکسی")
         await safe_edit(message, f"⏳ استخراج {'پروکسی' if is_proxy else 'کانفیگ'}..."); results, doc_files = [], []
-        for ch in ["mitivpn", "vasl_bashim", "Zel2oVPN"]:
+        # افزودن کانال iproxy_Meli
+        for ch in ["mitivpn", "vasl_bashim", "Zel2oVPN", "iproxy_Meli"]:
             try:
                 async for msg in app.get_chat_history(ch, limit=20):
                     text = msg.text or msg.caption or ""
@@ -351,26 +376,31 @@ def register_handlers(app, uid):
     async def clock_cmd(client, message):
         if not has_perm(uid, "p_clock"): return await locked_msg(message)
         parts, s = message.command, USER_SETTINGS[uid]
-        if len(parts) < 2: return await safe_edit(message, "⏰ **تنظیمات ساعت**\n\n🔸 `.ساعت اسم روشن 5`\n🔸 `.ساعت بیو روشن 9`\n❌ `.ساعت [اسم/بیو] خاموش`")
+        if len(parts) < 2: return await safe_edit(message, "⏰ **تنظیمات ساعت**\nجهت استفاده راحت‌تر، کلمه `.پنل` را بفرستید و از دکمه شیشه‌ای «ساعت» اقدام کنید.")
         target = parts[1]
+        
+        db = load_db()
+        if str(uid) not in db: db[str(uid)] = {}
         
         if target == "بیو":
             action = parts[2] if len(parts) > 2 else ""
             if action == "روشن":
-                if not s["bio_clock_status"]:
+                if not db[str(uid)].get("bio_clock_status"):
                     try: s["base_bio"] = (await app.invoke(raw.functions.users.GetFullUser(id=await app.resolve_peer("me")))).full_user.about.rsplit(" | ", 1)[0]
                     except: s["base_bio"] = ""
-                s["bio_clock_status"] = True; s["bio_font"] = int(parts[3]) if len(parts) >= 4 and parts[3].isdigit() else 1
+                db[str(uid)]["bio_clock_status"] = True; db[str(uid)]["bio_font"] = int(parts[3]) if len(parts) >= 4 and parts[3].isdigit() else 1
+                save_db(db)
                 await safe_edit(message, "✅ ساعت بیو فعال شد.")
             elif action == "خاموش": 
-                s["bio_clock_status"] = False
-                try: await app.update_profile(bio=s["base_bio"])
+                db[str(uid)]["bio_clock_status"] = False
+                save_db(db)
+                try: await app.update_profile(bio=s.get("base_bio", ""))
                 except: pass
                 await safe_edit(message, "❌ ساعت بیو خاموش شد.")
         elif target == "اسم":
             action = parts[2] if len(parts) > 2 else ""
             if action == "روشن":
-                if not s["clock_status"]:
+                if not db[str(uid)].get("clock_status"):
                     try: 
                         me = await app.get_me()
                         s["base_first_name"] = (me.first_name or "User").split(" | ")[0]
@@ -378,11 +408,13 @@ def register_handlers(app, uid):
                     except: 
                         s["base_first_name"] = "User"
                         s["base_last_name"] = ""
-                s["clock_status"] = True; s["font"] = int(parts[3]) if len(parts) >= 4 and parts[3].isdigit() else 1
-                await safe_edit(message, "✅ ساعت اسم (روی فامیل) فعال شد.")
+                db[str(uid)]["clock_status"] = True; db[str(uid)]["font"] = int(parts[3]) if len(parts) >= 4 and parts[3].isdigit() else 1
+                save_db(db)
+                await safe_edit(message, "✅ ساعت اسم فعال شد.")
             elif action == "خاموش": 
-                s["clock_status"] = False
-                try: await app.update_profile(first_name=s["base_first_name"], last_name=s["base_last_name"])
+                db[str(uid)]["clock_status"] = False
+                save_db(db)
+                try: await app.update_profile(first_name=s.get("base_first_name", "User"), last_name=s.get("base_last_name", ""))
                 except: pass
                 await safe_edit(message, "❌ ساعت اسم خاموش شد.")
 
@@ -482,50 +514,37 @@ def register_handlers(app, uid):
         if not has_perm(uid, "p_dl"): return await locked_msg(message)
         if len(message.command) < 2: return await safe_edit(message, "📥 **دانلودر مدیا قدرتمند**\n\n🔸 `.دانلود [لینک]`")
         link = message.command[1]
-        await safe_edit(message, "⏳ پردازش فایل...")
         
-        if "t.me/" in link:
-            try:
-                if "t.me/c/" in link: chat_id, msg_id = int("-100" + link.split("/")[4]), int(link.split("/")[5])
-                else: chat_id, msg_id = link.split("/")[3], int(link.split("/")[4])
-                msg = await app.get_messages(chat_id, msg_id)
-                dl_path = await msg.download()
-                await safe_edit(message, "⬆️ آپلود مدیا در این چت...")
-                if msg.photo: await app.send_photo(message.chat.id, dl_path)
-                elif msg.video: await app.send_video(message.chat.id, dl_path)
-                elif msg.document: await app.send_document(message.chat.id, dl_path)
-                elif msg.audio: await app.send_audio(message.chat.id, dl_path)
-                elif msg.voice: await app.send_voice(message.chat.id, dl_path)
-                else: await app.send_document(message.chat.id, dl_path)
-                os.remove(dl_path); await message.delete(); return
-            except Exception as e: return await safe_edit(message, f"❌ خطا در تلگرام:\n`{e}`")
-
+        if not any(x in link for x in ["tiktok", "instagram", "youtube", "youtu.be"]):
+            return await safe_edit(message, "❌ این لینک معتبر نیست. لطفاً یکی از لینک‌های اینستاگرام، تیک‌تاک یا یوتیوب را بفرستید.")
+            
+        await safe_edit(message, "⏳ پردازش فایل از سرور ابری...")
         try:
-            bot_id = "SaveAsBot"
+            bot_id = "HK_tictok_BOT"
             sent_msg = await app.send_message(bot_id, link)
-            await safe_edit(message, "⏳ ارتباط با سرور ابری (منتظر دریافت مدیا)...")
             downloaded = False
             for _ in range(30):
                 await asyncio.sleep(2)
                 async for bot_msg in app.get_chat_history(bot_id, limit=3):
                     if bot_msg.id > sent_msg.id:
                         if bot_msg.media:
-                            await safe_edit(message, "⬇️ دانلود مدیا از سرور ابری...")
+                            await safe_edit(message, "⬇️ دانلود مدیا انجام شد. در حال آپلود...")
                             dl_path = await bot_msg.download()
-                            await safe_edit(message, "⬆️ آپلود در چت فعلی...")
-                            if bot_msg.video: await app.send_video(message.chat.id, dl_path)
-                            elif bot_msg.photo: await app.send_photo(message.chat.id, dl_path)
-                            elif bot_msg.document: await app.send_document(message.chat.id, dl_path)
-                            elif bot_msg.audio: await app.send_audio(message.chat.id, dl_path)
+                            
+                            platform = "TikTok" if "tiktok" in link else "Instagram" if "instagram" in link else "YouTube"
+                            cap = f"📥 دانلود شده از {platform}"
+                            
+                            if bot_msg.video: await app.send_video(message.chat.id, dl_path, caption=cap)
+                            elif bot_msg.photo: await app.send_photo(message.chat.id, dl_path, caption=cap)
+                            elif bot_msg.document: await app.send_document(message.chat.id, dl_path, caption=cap)
+                            elif bot_msg.audio: await app.send_audio(message.chat.id, dl_path, caption=cap)
+                            
                             os.remove(dl_path); await message.delete()
-                            downloaded = True; break
-                        elif bot_msg.text and "error" in bot_msg.text.lower():
-                            await safe_edit(message, "❌ لینک نامعتبر است یا ربات قادر به دانلود آن نیست.")
+                            try: await app.delete_history(bot_id) # پاکسازی و میوت
+                            except: pass
                             downloaded = True; break
                 if downloaded: break
             if not downloaded: await safe_edit(message, "❌ سرور دانلودر پاسخ نداد (تایم‌اوت).")
-            try: await app.delete_history(bot_id)
-            except: pass
         except Exception as e: await safe_edit(message, f"❌ خطا در دانلودر:\n`{e}`")
 
     @app.on_message(filters.me & filters.command("هوش", prefixes="."))
@@ -581,14 +600,17 @@ def register_handlers(app, uid):
             res = await asyncio.to_thread(requests.get, "https://api.wallex.ir/v1/markets", headers={'User-Agent': 'Mozilla'}, timeout=10)
             data = res.json()['result']['symbols']
             
+            # افزودن ارزهای بیشتر طبق درخواست
             coins = {
                 "تتر": ("USDT", "💵"), "بیتکوین": ("BTC", "🪙"), "اتریوم": ("ETH", "💎"),
                 "ترون": ("TRX", "🔴"), "دوج": ("DOGE", "🐕"), "سولانا": ("SOL", "🌞"),
-                "شیبا": ("SHIB", "🐶"), "کاردانو": ("ADA", "💠"), "ریپل": ("XRP", "🌊")
+                "شیبا": ("SHIB", "🐶"), "کاردانو": ("ADA", "💠"), "ریپل": ("XRP", "🌊"),
+                "تون": ("TON", "💎"), "نات‌کوین": ("NOT", "🪙"), "پپ": ("PEPE", "🐸"),
+                "لایت‌کوین": ("LTC", "🪙"), "بیت‌کوین‌کش": ("BCH", "💵"), "طلا": ("XAU", "🪙")
             }
             
             if cmd == "ارز":
-                out = "💰 **قیمت لحظه‌ای ارزها:**\n\n"
+                out = "💰 **قیمت لحظه‌ای ارزها و کریپتو:**\n(برای دریافت قیمت تکی، نام ارز را به عنوان دستور بفرستید، مثال: `.تون`)\n\n"
                 for c_name, (sym, emoji) in coins.items():
                     try:
                         p = float(data[f'{sym}TMN']['stats']['lastPrice'])
@@ -669,16 +691,26 @@ def register_handlers(app, uid):
         if not has_perm(uid, "p_music"): return await locked_msg(message)
         parts = message.command
         if len(parts) < 2: return await safe_edit(message, "🎵 **جستجوی موسیقی**\n\n🔸 `.اهنگ [اسم]`")
-        query, index = " ".join(parts[1:]), 0
-        if parts[-1].isdigit() and len(parts) > 2: index, query = int(parts[-1]) - 1, " ".join(parts[1:-1])
-        await safe_edit(message, "🔍 جستجو...")
+        query = " ".join(parts[1:])
+        await safe_edit(message, "🔍 جستجو و دانلود آهنگ از سرور ابری...")
         try:
-            results = await app.get_inline_bot_results("vkmusic_bot", query)
-            if results.results:
-                await app.send_inline_bot_result(message.chat.id, results.query_id, results.results[index].id)
-                await message.delete()
-            else: await safe_edit(message, "❌ پیدا نشد.")
-        except Exception: await safe_edit(message, f"❌ خطا.")
+            bot_id = "vkmusic_bot"
+            sent_msg = await app.send_message(bot_id, query)
+            downloaded = False
+            for _ in range(15):
+                await asyncio.sleep(2)
+                async for bot_msg in app.get_chat_history(bot_id, limit=3):
+                    if bot_msg.id > sent_msg.id and bot_msg.audio:
+                        dl_path = await bot_msg.download()
+                        await app.send_audio(message.chat.id, dl_path)
+                        os.remove(dl_path)
+                        await message.delete()
+                        try: await app.delete_history(bot_id)
+                        except: pass
+                        downloaded = True; break
+                if downloaded: break
+            if not downloaded: await safe_edit(message, "❌ پیدا نشد یا سرور پاسخ نداد.")
+        except Exception as e: await safe_edit(message, f"❌ خطا: {e}")
 
     @app.on_message(filters.me & filters.command("قلب", prefixes="."))
     async def anim_cmd(client, message):
@@ -874,12 +906,23 @@ def register_handlers(app, uid):
         if has_perm(uid, "p_forcejoin"):
             for t in targets:
                 if t in s["force_join"] and sender:
-                    try: await app.get_chat_member(s["force_join"][t], sender)
-                    except UserNotParticipant:
+                    try: 
+                        chat_id = s["force_join"][t]
+                        if str(chat_id).startswith("-") and not str(chat_id).startswith("-100"): chat_id = int(f"-100{str(chat_id)[1:]}")
+                        elif str(chat_id).isdigit(): chat_id = int(f"-100{chat_id}")
+                        elif str(chat_id).startswith("@"): chat_id = str(chat_id)
+                        else: chat_id = int(chat_id)
+
+                        member = await app.get_chat_member(chat_id, sender)
+                        if member.status.value in ['left', 'kicked', 'restricted']: raise Exception
+                    except:
                         try:
-                            await message.delete(); warn = await app.send_message(cid, f"⚠️ برای ارسال پیام باید در @{s['force_join'][t]} عضو شوید."); await asyncio.sleep(5); await warn.delete(); return
+                            await message.delete()
+                            results = await app.get_inline_bot_results(HELPER_BOT_USERNAME, f"fjoin_warn")
+                            warn = await app.send_inline_bot_result(message.chat.id, results.query_id, results.results[0].id)
+                            await asyncio.sleep(5); await warn.delete(); return
                         except: pass
-                    except: pass; break 
+                        break 
         if has_perm(uid, "p_locks"):
             for t in targets:
                 if t in s["locks"]["groups"]:
@@ -1016,7 +1059,7 @@ def register_handlers(app, uid):
                 else: await app.send_message(message.chat.id, msg_text)
             except: pass
 
-    @app.on_message(filters.me & filters.text & ~filters.command(["ping", "پینگ", "پنل", "panel", "پروفایل", "هوش", "لینک", "ارز", "تتر", "بیتکوین", "اتریوم", "دوج", "ترون", "سولانا", "شیبا", "کاردانو", "ریپل", "لوگو", "ترجمه", "اهنگ", "ویس", "تگ", "تقلب", "تاس", "ساعت", "تبچی", "اسپم", "پاکسازی", "حذف", "دانلود", "قفل", "فیلتر", "اجباری", "پاسخ", "ریکت", "نگهبان", "انتی", "سکوت", "ازادی", "منشی", "اکشن", "حالت", "ایدی", "قلب", "کامنت", "خوشامد", "سین پیوی", "سین گروه", "سین کانال", "سین ربات", "کیوار", "کانفیگ", "پروکسی", "زماندار", "اسکرین"], prefixes=[".", "/", ""]))
+    @app.on_message(filters.me & filters.text & ~filters.command(["ping", "پینگ", "پنل", "panel", "پروفایل", "هوش", "لینک", "ارز", "تتر", "بیتکوین", "اتریوم", "دوج", "ترون", "سولانا", "شیبا", "کاردانو", "ریپل", "لوگو", "ترجمه", "اهنگ", "ویس", "تگ", "تقلب", "تاس", "ساعت", "تبچی", "اسپم", "پاکسازی", "حذف", "دانلود", "قفل", "فیلتر", "اجباری", "پاسخ", "ریکت", "نگهبان", "انتی", "سکوت", "ازادی", "منشی", "اکشن", "حالت", "ایدی", "قلب", "کامنت", "خوشامد", "سین پیوی", "سین گروه", "سین کانال", "سین ربات", "کیوار", "کانفیگ", "پروکسی", "زماندار", "اسکرین", "انقضا"], prefixes=[".", "/", ""]))
     async def auto_text_formatter(client, message):
         if not has_perm(uid, "p_textmode"): return
         m = USER_SETTINGS[uid]["text_mode"]
@@ -1052,7 +1095,7 @@ async def main():
             now_ts = int(time.time())
             
             for uid_str, data in list(db.items()):
-                if uid_str == "config": continue
+                if uid_str == "config" or uid_str == "reseller_market": continue
                 uid = int(uid_str)
                 status = data.get("status", "inactive")
 
@@ -1091,11 +1134,11 @@ async def main():
                         
                     if uid not in running_clients:
                         try:
-                            # ساختار داینامیک نام برند برای نمایندگان و مستر
                             brand = data.get("brand_name", "nitroself") if data.get("is_reseller") else "nitroself"
                             if data.get("reseller_owner"):
                                 owner = str(data["reseller_owner"])
                                 brand = db.get(owner, {}).get("brand_name", "nitroself")
+                                if not brand: brand = "nitroself"
                                 
                             app = Client(f"user_{uid}", api_id=API_ID, api_hash=API_HASH, session_string=data["session"], in_memory=True, app_version=brand, device_model=brand)
                             register_handlers(app, uid)
