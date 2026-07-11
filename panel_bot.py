@@ -14,6 +14,8 @@ from aiogram.types import (
     CallbackQuery
 )
 
+API_ID = 6
+API_HASH = "eb06d4abfb49dc3eeb1aeb98ae0f581e"
 BOT_TOKEN = "8946302310:AAErar2ykfD58Xuq4fLrhF9USnaWG4MVIJ0"
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -23,8 +25,10 @@ DB_FILE = "database.json"
 def load_db():
     if os.path.exists(DB_FILE):
         try:
-            with open(DB_FILE, "r", encoding="utf-8") as f: return json.load(f)
-        except: return {}
+            with open(DB_FILE, "r", encoding="utf-8") as f: 
+                return json.load(f)
+        except: 
+            return {}
     return {}
 
 def save_db(data):
@@ -36,36 +40,54 @@ def save_db(data):
 
 def get_entry_keyboard(owner_id):
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎯 ورود به داشبورد", callback_data=f"enter|{owner_id}", style=ButtonStyle.SUCCESS), 
-         InlineKeyboardButton(text="❌ بستن پنل", callback_data=f"close|{owner_id}", style=ButtonStyle.DANGER)],
-        [InlineKeyboardButton(text="📞 پشتیبانی", url="https://t.me/Im_Iliiya", style=ButtonStyle.PRIMARY)]
+        [
+            InlineKeyboardButton(text="🎯 ورود به داشبورد", callback_data=f"enter|{owner_id}", style=ButtonStyle.SUCCESS), 
+            InlineKeyboardButton(text="❌ بستن پنل", callback_data=f"close|{owner_id}", style=ButtonStyle.DANGER)
+        ],
+        [
+            InlineKeyboardButton(text="📞 پشتیبانی", url="https://t.me/Im_Iliiya", style=ButtonStyle.PRIMARY)
+        ]
     ])
 
 def get_categories_keyboard(user_id):
     db = load_db()
-    layout = db.get("config", {}).get("panel_config", {}).get("layout", [])
-    names = db.get("config", {}).get("panel_config", {}).get("names", {})
-    user_data = db.get(str(user_id), {})
-    active_modules = user_data.get("active_modules", [])
-    has_full_package = user_data.get("has_full_package", False)
-    free_modules = ["p_ping", "p_info"] 
-    
-    kb = []
-    for row_idx, row in enumerate(layout):
-        kb_row = []
-        row_color = ButtonStyle.PRIMARY if row_idx % 2 == 0 else ButtonStyle.SUCCESS
-        for btn_key in row:
-            btn_name = names.get(btn_key, btn_key)
-            is_locked = False
-            if btn_key not in free_modules and not has_full_package and btn_key not in active_modules: 
-                btn_name = f"🔒 {btn_name}"; is_locked = True
-            btn_style = ButtonStyle.SECONDARY if is_locked else row_color
-            kb_row.append(InlineKeyboardButton(text=btn_name, callback_data=f"{btn_key}|{user_id}", style=btn_style))
-        kb.append(kb_row)
+    try:
+        layout = db["config"]["panel_config"]["layout"]
+        names = db["config"]["panel_config"]["names"]
+        user_data = db.get(str(user_id), {})
+        active_modules = user_data.get("active_modules", [])
+        has_full_package = user_data.get("has_full_package", False)
+        free_modules = ["p_ping", "p_info"] 
         
-    kb.append([InlineKeyboardButton(text="🧮 ماشین حساب", callback_data=f"calc_main|{user_id}", style=ButtonStyle.DANGER)])
-    kb.append([InlineKeyboardButton(text="🔙 بازگشت به صفحه اصلی", callback_data=f"back|{user_id}", style=ButtonStyle.DANGER)])
-    return InlineKeyboardMarkup(inline_keyboard=kb)
+        kb = []
+        for row_idx, row in enumerate(layout):
+            kb_row = []
+            row_color = ButtonStyle.PRIMARY if row_idx % 2 == 0 else ButtonStyle.SUCCESS
+
+            for btn_key in row:
+                btn_name = names.get(btn_key, btn_key)
+                is_locked = False
+                
+                if btn_key not in free_modules and not has_full_package and btn_key not in active_modules: 
+                    btn_name = f"🔒 {btn_name}"
+                    is_locked = True
+                
+                # استفاده از DANGER برای قفل‌ها تا کرش نکند
+                btn_style = ButtonStyle.DANGER if is_locked else row_color
+                kb_row.append(InlineKeyboardButton(text=btn_name, callback_data=f"{btn_key}|{user_id}", style=btn_style))
+                
+            kb.append(kb_row)
+            
+        kb.append([
+            InlineKeyboardButton(text="🧮 ماشین حساب", callback_data=f"calc_main|{user_id}", style=ButtonStyle.DANGER)
+        ])
+        
+        kb.append([
+            InlineKeyboardButton(text="🔙 بازگشت به صفحه اصلی", callback_data=f"back|{user_id}", style=ButtonStyle.DANGER)
+        ])
+        return InlineKeyboardMarkup(inline_keyboard=kb)
+    except Exception: 
+        return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="❌ خطا در خواندن اطلاعات", callback_data=f"close|{user_id}", style=ButtonStyle.DANGER)]])
 
 def get_back_button(owner_id):
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -80,7 +102,7 @@ def get_clock_menu(owner_id, db):
     kb = [
         [InlineKeyboardButton(text=f"{name_status} ساعت اسم", callback_data=f"clock_name_menu|{owner_id}", style=ButtonStyle.DANGER),
          InlineKeyboardButton(text=f"{bio_status} ساعت بیو", callback_data=f"clock_bio_menu|{owner_id}", style=ButtonStyle.DANGER)],
-        [InlineKeyboardButton(text="🔴 خاموش کردن هردو", callback_data=f"clock_turn_off|{owner_id}", style=ButtonStyle.SECONDARY)],
+        [InlineKeyboardButton(text="🔴 خاموش کردن هردو", callback_data=f"clock_turn_off|{owner_id}", style=ButtonStyle.PRIMARY)],
         [InlineKeyboardButton(text="🔙 بازگشت", callback_data=f"enter|{owner_id}", style=ButtonStyle.PRIMARY)]
     ]
     return InlineKeyboardMarkup(inline_keyboard=kb)
@@ -101,12 +123,19 @@ def get_font_menu(owner_id, target_type, current_font):
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
 def get_calculator_keyboard(owner_id):
-    keys = [["7", "8", "9", "/"], ["4", "5", "6", "*"], ["1", "2", "3", "-"], ["C", "0", "=", "+"]]
+    keys = [
+        ["7", "8", "9", "/"],
+        ["4", "5", "6", "*"],
+        ["1", "2", "3", "-"],
+        ["C", "0", "=", "+"]
+    ]
     kb = []
     for row in keys:
         r_btns = []
         for k in row:
-            style = ButtonStyle.DANGER if k == "C" else ButtonStyle.SUCCESS if k in ["=", "+", "-", "*", "/"] else ButtonStyle.PRIMARY
+            if k == "C": style = ButtonStyle.DANGER
+            elif k in ["=", "+", "-", "*", "/"]: style = ButtonStyle.SUCCESS
+            else: style = ButtonStyle.PRIMARY
             r_btns.append(InlineKeyboardButton(text=k, callback_data=f"calc_act|{owner_id}|{k}", style=style))
         kb.append(r_btns)
     kb.append([InlineKeyboardButton(text="🔙 بازگشت به پنل", callback_data=f"enter|{owner_id}", style=ButtonStyle.DANGER)])
@@ -114,7 +143,7 @@ def get_calculator_keyboard(owner_id):
 
 PANEL_TEXTS = {
     "p_guard": "🛡 <b>نگهبان چت هوشمند (تامین امنیت)</b>\n\nبا این قابلیت می‌توانید از حذف، ویرایش یا ارسال پیام‌های زمان‌دار در چت‌های مختلف مطلع شوید.\n\n🔸 <code>.نگهبان پیوی حذف روشن</code>\n🔸 <code>.نگهبان گروه ویرایش روشن</code>\n🔸 <code>.نگهبان کانال زماندار روشن</code>\n🎯 <code>.نگهبان گروه افزودن</code> (محدود کردن نگهبان فقط به گروه فعلی)\n📋 <code>.نگهبان لیست</code>",
-    "p_clock": "⏰ <b>ساعت زنده (اسم و بیو)</b>\n\nاین قابلیت ساعت دقیق ایران را روی پروفایل شما قرار می‌دهد. یکی از گزینه‌های زیر را انتخاب کنید:",
+    "p_clock": "⏰ <b>ساعت زنده (اسم و بیو)</b>\n\nاین قابلیت ساعت دقیق ایران را با فونت‌های جذاب روی پروفایل شما قرار می‌دهد. از دکمه‌های زیر برای تنظیم استفاده کنید:",
     "p_textmode": "✨ <b>حالت‌دهنده متن چت (استایل‌ساز)</b>\n\nمتون خود را حرفه‌ای کنید! این قابلیت تمام پیام‌های ساده شما را به فرمت دلخواه تبدیل می‌کند:\n\n🎨 <code>.حالت بولد</code>\n🎨 <code>.حالت کج</code>\n🎨 <code>.حالت اسپویلر</code> (مخفی کردن متن)\n🎨 <code>.حالت نقل‌قول</code> (بلاک‌کوت)\n🎨 <code>.حالت مونو</code>\n🔗 <code>.حالت لینکدار [لینک شما]</code>\n❌ <code>.حالت خاموش</code>",
     "p_action": "🎭 <b>اکشن‌ساز (حالت فیک)</b>\n\nبه بقیه نشان دهید در حال انجام کاری هستید (حتی وقتی نیستید!)\n\n🔸 <code>.اکشن پیوی تایپ</code>\n🔸 <code>.اکشن پیوی ویس</code>\n🔸 <code>.اکشن گروه عکس</code>\n🔸 <code>.اکشن گروه ویدیو</code>\n🔸 <code>.اکشن گروه بازی</code>\n❌ <code>.اکشن پیوی خاموش</code>",
     "p_locks": "🔐 <b>قفل‌های امنیتی ضد مزاحمت</b>\n\nگروه‌ها و پیوی خود را امن کنید!\n\n🔸 <code>.قفل پیوی روشن</code> (حذف خودکار پیام مزاحم‌ها)\n🔸 <code>.قفل لینک روشن</code> (در گروه)\n🔸 <code>.قفل عکس روشن</code>\n🔸 <code>.قفل فوروارد روشن</code>\n🔸 <code>.قفل یوزرنیم روشن</code>\n❌ <code>.قفل لینک خاموش</code>",
@@ -144,9 +173,24 @@ PANEL_TEXTS = {
     "p_v2ray": "🌐 <b>استخراج پروکسی و V2ray</b>\n\nجدیدترین کانفیگ‌ها و پروکسی‌ها را از کانال‌های اسپانسر جمع‌آوری می‌کند.\n\n🔸 <code>.کانفیگ</code>\n🔸 <code>.پروکسی</code>",
     "p_qr": "⬛️ <b>ساخت و خواندن کیوآر کد</b>\n\n🔸 <code>.کیوار ساخت [متن یا لینک]</code>\n🔸 (ریپلای روی کیوآر کد) <code>.کیوار خواندن</code>",
     "p_profile": "👤 <b>مدیریت پیشرفته پروفایل</b>\n\nبدون رفتن به تنظیمات تلگرام، حسابتان را تغییر دهید.\n\n🔸 (ریپلای روی عکس) <code>.پروفایل عکس</code>\n🔸 <code>.پروفایل اسم [نام] | [فامیل]</code>\n🔸 <code>.پروفایل بیو [متن]</code>\n🔸 <code>.پروفایل یوزرنیم [ID]</code>\n🔸 <code>.پروفایل تولد [سال-ماه-روز]</code>",
-    "p_schedule": "⏱ <b>ارسال زمان‌دار هوشمند</b>\n\nپیام را تنظیم کنید تا ربات در دقیقه مشخص شده آن را ارسال کند!\n\n🔸 <code>.زماندار [دقیقه] [متن پیام]</code>\nمثال: <code>.زماندار 5 سلام فردا میبینمت</code>\n(پیام دستور فوراً محو می‌شود)",
-    "p_screen": "📸 <b>اسکرین‌شات از پیام</b>\n\nعکسی تمیز و زیبا از یک پیام تلگرامی بگیرید.\n\n🔸 کافیست روی پیام مورد نظر ریپلای کنید و بفرستید:\n<code>.اسکرین</code>"
+    "p_schedule": "⏱ <b>ارسال زمان‌دار هوشمند</b>\n\nبا این قابلیت ربات پیام شما را نگه می‌دارد و سر وقت در چت می‌فرستد.\n\n🔸 <code>.زماندار [دقیقه] [متن پیام]</code>\nمثال: <code>.زماندار 5 سلام فردا میبینمت</code>\n(پیام دستور فوراً محو می‌شود)",
+    "p_screen": "📸 <b>اسکرین‌شات از پیام</b>\n\nعکسی تمیز و بدون بک‌گراند از یک پیام تلگرامی بگیرید.\n\n🔸 کافیست روی پیام مورد نظر ریپلای کنید و بفرستید:\n<code>.اسکرین</code>"
 }
+
+@dp.inline_query()
+async def inline_helper_query(inline_query: InlineQuery):
+    if "panel" in inline_query.query.lower():
+        owner_id = inline_query.from_user.id
+        result = InlineQueryResultArticle(
+            id="panel_main",
+            title="پنل مدیریت سلف‌ربات", 
+            input_message_content=InputTextMessageContent(
+                message_text="🤖 <b>داشبورد مدیریت سوپر سلف‌ربات VIP</b> 🤖\n\nبرای دسترسی به امکانات، روی دکمه زیر کلیک کنید 👇",
+                parse_mode=ParseMode.HTML
+            ), 
+            reply_markup=get_entry_keyboard(owner_id)
+        )
+        await inline_query.answer([result], cache_time=1)
 
 calc_sessions = {}
 
@@ -159,7 +203,7 @@ async def helper_callback_handler(callback_query: CallbackQuery):
     owner_id = int(parts[1]) if len(parts) > 1 else clicker_id
     
     if clicker_id != owner_id:
-        return await callback_query.answer("⚠️ این پنل برای شما نیست!", show_alert=True)
+        return await callback_query.answer("⚠️ این پنل برای شما نیست! (فقط احضارکننده دسترسی دارد)", show_alert=True)
     
     if callback_query.inline_message_id:
         db = load_db()
@@ -224,7 +268,7 @@ async def helper_callback_handler(callback_query: CallbackQuery):
     await callback_query.answer()
 
 async def main():
-    print("🚀 Panel Bot is starting (Enhanced Descriptions + Interactive Clock)...")
+    print("🚀 Panel Bot is starting...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
