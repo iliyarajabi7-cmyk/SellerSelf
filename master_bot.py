@@ -2,10 +2,11 @@ import asyncio
 import json
 import os
 import threading
+import random
+import string
 import jdatetime
 import requests
 from datetime import datetime, timezone, timedelta
-from huggingface_hub import HfApi
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import (
@@ -16,7 +17,7 @@ from aiogram.types import (
     ReplyKeyboardRemove
 )
 from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode, ButtonStyle
+from aiogram.enums import ParseMode, ButtonStyle, ChatMemberStatus
 
 from pyrogram import Client as PyroClient
 from pyrogram.errors import SessionPasswordNeeded
@@ -45,18 +46,6 @@ temp_clients = {}
 
 def get_iran_time(): return datetime.now(IRAN_TZ)
 
-def download_hf():
-    try:
-        if HF_TOKEN and REPO_ID and not os.path.exists(DB_FILE):
-            headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-            url = f"https://huggingface.co/datasets/{REPO_ID}/resolve/main/{DB_FILE}"
-            res = requests.get(url, headers=headers)
-            if res.status_code == 200:
-                with open(DB_FILE, "wb") as f: f.write(res.content)
-    except: pass
-
-download_hf()
-
 def load_db():
     if os.path.exists(DB_FILE):
         try:
@@ -64,19 +53,17 @@ def load_db():
         except: return {}
     return {}
 
-def upload_to_hf():
-    try:
-        if HF_TOKEN:
-            api = HfApi()
-            api.upload_file(path_or_fileobj=DB_FILE, path_in_repo=DB_FILE, repo_id=REPO_ID, repo_type="dataset", token=HF_TOKEN, commit_message="Update DB via MasterBot")
-    except Exception: pass
-
 def save_db(data):
     try:
         tmp_file = DB_FILE + ".tmp"
         with open(tmp_file, "w") as f: json.dump(data, f, indent=4)
-        os.replace(tmp_file, DB_FILE) 
-        threading.Thread(target=upload_to_hf, daemon=True).start()
+        os.replace(tmp_file, DB_FILE)
+        if HF_TOKEN and REPO_ID:
+            def upload():
+                from huggingface_hub import HfApi
+                api = HfApi()
+                api.upload_file(path_or_fileobj=DB_FILE, path_in_repo=DB_FILE, repo_id=REPO_ID, repo_type="dataset", token=HF_TOKEN, commit_message="Update DB via MasterBot")
+            threading.Thread(target=upload, daemon=True).start()
     except Exception as e: print("Save DB Error:", e)
 
 _db = load_db()
@@ -87,6 +74,7 @@ _db["config"]["gift_codes"] = _db["config"].get("gift_codes", {})
 _db["config"]["fjoin_active"] = _db["config"].get("fjoin_active", False)
 _db["config"]["fjoin"] = _db["config"].get("fjoin", [])
 _db["config"]["gateway"] = _db["config"].get("gateway", {"active": False, "merchant": ""})
+_db["config"]["discount_reseller_codes"] = _db["config"].get("discount_reseller_codes", {})
 if "reseller_market" not in _db: _db["reseller_market"] = {}
 
 _db["config"]["module_prices"] = {
@@ -124,7 +112,7 @@ _db["config"]["panel_config"] = {
         "p_music": "سرچ آهنگ", "p_tabchi": "تبچی", "p_comment": "کامنت اول", 
         "p_crypto": "قیمت ارز", "p_readall": "سین‌زن همگانی", 
         "p_v2ray": "پروکسی و V2ray", "p_qr": "کیوآر کد", "p_profile": "مدیریت پروفایل",
-        "p_schedule": "ارسال زمان‌دار", "p_screen": "اسکرین‌شات پیام"
+        "p_schedule": "ارسال زمان‌دار", "p_screen": "اسکرین"
     }
 }
 save_db(_db)
@@ -142,7 +130,8 @@ def init_user(db, user_id, message=None):
             "last_test_date": None, "paused_at": None, "phone": None,
             "first_name": first_name, "username": username,
             "is_reseller": False, "brand_name": "", "reseller_owner": None,
-            "invited_by": None, "fjoin_passed": False
+            "invited_by": None, "fjoin_passed": False,
+            "is_discount_reseller": False, "discount_percent": 0
         }
 
 async def check_fjoin_status(user_id, db):
@@ -158,10 +147,10 @@ async def check_fjoin_status(user_id, db):
             else: cid = int(cid)
 
             member = await bot.get_chat_member(cid, user_id)
-            if member.status.value in ['left', 'kicked']: raise Exception
-            kb.append([InlineKeyboardButton(text=f"✅ {ch['name']}", url=ch['link'], style=ButtonStyle.SUCCESS)]) 
+            if member.status in [ChatMemberStatus.LEFT, ChatMemberStatus.KICKED, ChatMemberStatus.BANNED]: raise Exception
+            kb.append([InlineKeyboardButton(text=f"✅ {ch['name']}", url=ch['link'])]) 
         except:
-            kb.append([InlineKeyboardButton(text=f"❌ {ch['name']} (عضو نیستید)", url=ch['link'], style=ButtonStyle.DANGER)])
+            kb.append([InlineKeyboardButton(text=f"❌ {ch['name']} (عضو نیستید)", url=ch['link'])])
             all_joined = False
     
     if not all_joined:
@@ -198,7 +187,12 @@ def get_app_store_text(db, user_id):
     u = db[str(user_id)]
     drain = get_temp_hourly_drain(db, user_id)
     ppc = db["config"]["price_per_mah"]
-    cost_toman = drain * ppc
+    
+    # اعمال تخفیف نمایندگی درصدی در نمایش
+    discount = u.get("discount_percent", 0)
+    actual_ppc = ppc * (100 - discount) / 100
+    cost_toman = drain * actual_ppc
+    
     active_modules = u.get("temp_modules", [])
     has_full = u.get("temp_has_full", False)
     prices = db["config"]["module_prices"]
@@ -220,7 +214,7 @@ def get_app_store_text(db, user_id):
             cost = prices.get(m, 0)
             if cost > 0: text += f"✔️ {names.get(m, m)} — مصرف: `{cost}` میلی‌آمپر\n"
             
-    text += f"\n📊 *وضعیت مجموع مصرف این پکیج:*\n⚡️ `{drain}` میلی‌آمپر (معادل `{cost_toman:,}` تومان در ساعت)\n"
+    text += f"\n📊 *وضعیت مجموع مصرف این پکیج:*\n⚡️ `{drain}` میلی‌آمپر (معادل `{int(cost_toman):,}` تومان در ساعت)\n"
     return text
 
 def get_numpad_keyboard(prefix):
@@ -247,8 +241,7 @@ def main_menu_keyboard(db, user_id):
     u = db[str(user_id)]
     is_reseller = u.get("is_reseller", False)
     brand = u.get("brand_name", "")
-    
-    invites_count = len([x for x in db if x != "config" and x != "reseller_market" and x.isdigit() and db[x].get('invited_by') == user_id and db[x].get('fjoin_passed')])
+    is_discount_reseller = u.get("is_discount_reseller", False)
     
     kb = [
         [InlineKeyboardButton(text="🎛 پنل مدیریت سلف‌ربات", callback_data="menu_my_sub", style=ButtonStyle.PRIMARY)],
@@ -260,11 +253,13 @@ def main_menu_keyboard(db, user_id):
     ]
     
     if is_reseller:
-        kb.append([InlineKeyboardButton(text=f"🏢 پنل نمایندگی ({brand or 'بدون نام'})", callback_data="menu_reseller_panel", style=ButtonStyle.PRIMARY)])
-        kb.append([InlineKeyboardButton(text=f"🔗 شارژ رایگان (دعوت: {invites_count})", callback_data="menu_referral", style=ButtonStyle.SUCCESS)])
+        kb.append([InlineKeyboardButton(text=f"🏢 پنل نمایندگی ({brand or 'بدون نام'})", callback_data="menu_reseller_panel", style=ButtonStyle.PRIMARY),
+                   InlineKeyboardButton(text="🔗 شارژ رایگان", callback_data="menu_referral", style=ButtonStyle.PRIMARY)])
     else:
-        kb.append([InlineKeyboardButton(text=f"🔗 شارژ رایگان (دعوت: {invites_count})", callback_data="menu_referral", style=ButtonStyle.SUCCESS),
-                   InlineKeyboardButton(text="🤝 درخواست نمایندگی", callback_data="menu_req_reseller", style=ButtonStyle.PRIMARY)])
+        req_res_style = ButtonStyle.SUCCESS if is_discount_reseller else ButtonStyle.PRIMARY
+        req_res_text = "🤝 پنل نمایندگی (تخفیف‌دار)" if is_discount_reseller else "🤝 درخواست نمایندگی"
+        kb.append([InlineKeyboardButton(text=req_res_text, callback_data="menu_req_reseller", style=req_res_style),
+                   InlineKeyboardButton(text="🔗 شارژ رایگان", callback_data="menu_referral", style=ButtonStyle.PRIMARY)])
         
     kb.append([InlineKeyboardButton(text="👨‍💻 ارتباط با پشتیبانی", url=f"https://t.me/{SUPPORT_ID.replace('@', '')}", style=ButtonStyle.DANGER),
                InlineKeyboardButton(text="📢 کانال رسمی", url=CHANNEL_ID, style=ButtonStyle.DANGER)])
@@ -288,6 +283,7 @@ def admin_inline_keyboard(db):
          InlineKeyboardButton(text="🛠 تعیین مصرف قابلیت‌ها", callback_data="adm_mod_prices", style=ButtonStyle.PRIMARY)],
         [InlineKeyboardButton(text="📢 ارسال همگانی", callback_data="adm_broadcast", style=ButtonStyle.SUCCESS), 
          InlineKeyboardButton(text="♾ فعال‌سازی بینهایت", callback_data="adm_infinite", style=ButtonStyle.SUCCESS)],
+        [InlineKeyboardButton(text="🎁 ساخت کد نمایندگی درصدی", callback_data="adm_disc_reseller", style=ButtonStyle.PRIMARY)],
         [InlineKeyboardButton(text=fjoin_btn, callback_data="adm_toggle_fjoin", style=ButtonStyle.PRIMARY), 
          InlineKeyboardButton(text="➕ افزودن کانال اجباری", callback_data="adm_add_fjoin", style=ButtonStyle.PRIMARY)],
         [InlineKeyboardButton(text="👥 مدیریت کاربران", callback_data="adm_users_list_page_0", style=ButtonStyle.SUCCESS),
@@ -310,22 +306,21 @@ def generate_4col_users_keyboard(db, users, page, prefix, extra_btns=None):
     
     kb = []
     kb.append([
-        InlineKeyboardButton(text="📌 وضعیت", callback_data="ignore", style=ButtonStyle.PRIMARY),
-        InlineKeyboardButton(text="🔋 میلی آمپر", callback_data="ignore", style=ButtonStyle.PRIMARY),
-        InlineKeyboardButton(text="👤 اسم", callback_data="ignore", style=ButtonStyle.PRIMARY),
-        InlineKeyboardButton(text="🆔 شناسه", callback_data="ignore", style=ButtonStyle.PRIMARY)
+        InlineKeyboardButton(text="📌 وضعیت", callback_data="ignore"),
+        InlineKeyboardButton(text="🔋 میلی آمپر", callback_data="ignore"),
+        InlineKeyboardButton(text="👤 اسم", callback_data="ignore"),
+        InlineKeyboardButton(text="🆔 شناسه", callback_data="ignore")
     ])
     for u in page_users:
         ud = db[u]
         status = "🟢" if ud.get("status") == "active" else "🔴"
-        st_style = ButtonStyle.SUCCESS if ud.get("status") == "active" else ButtonStyle.DANGER
         balance = f"{ud.get('mah_balance', 0):,}"
         name = ud.get("first_name", "")[:8]
         if not name: name = "بدون‌نام"
         uid_short = u[:5] + ".." if len(u) > 5 else u
         
         kb.append([
-            InlineKeyboardButton(text=status, callback_data=f"{prefix}_info_{u}", style=st_style),
+            InlineKeyboardButton(text=status, callback_data=f"{prefix}_info_{u}", style=ButtonStyle.PRIMARY),
             InlineKeyboardButton(text=balance, callback_data=f"{prefix}_info_{u}", style=ButtonStyle.PRIMARY),
             InlineKeyboardButton(text=name, callback_data=f"{prefix}_info_{u}", style=ButtonStyle.PRIMARY),
             InlineKeyboardButton(text=uid_short, callback_data=f"{prefix}_info_{u}", style=ButtonStyle.PRIMARY)
@@ -333,7 +328,7 @@ def generate_4col_users_keyboard(db, users, page, prefix, extra_btns=None):
         
     nav_btns = []
     if page > 0: nav_btns.append(InlineKeyboardButton(text="⬅️ قبلی", callback_data=f"{prefix}_page_{page-1}", style=ButtonStyle.SUCCESS))
-    nav_btns.append(InlineKeyboardButton(text=f"صفحه {page+1}/{total_pages}", callback_data="ignore", style=ButtonStyle.PRIMARY))
+    nav_btns.append(InlineKeyboardButton(text=f"صفحه {page+1}/{total_pages}", callback_data="ignore"))
     if page < total_pages - 1: nav_btns.append(InlineKeyboardButton(text="بعدی ➡️", callback_data=f"{prefix}_page_{page+1}", style=ButtonStyle.SUCCESS))
     if nav_btns: kb.append(nav_btns)
     
@@ -368,7 +363,6 @@ def app_store_keyboard(db, user_id):
     names = db["config"]["panel_config"]["names"]
     
     kb = []
-    
     if has_full:
         kb.append([InlineKeyboardButton(text="پکیج فول VIP", callback_data="mod_toggle_full_package", style=ButtonStyle.SUCCESS)])
     else:
@@ -579,6 +573,20 @@ async def message_handler(message: types.Message):
             save_db(db); del user_states[user_id]; del temp_clients[ADMIN_ID]
             return await message.answer(f"🎉 *کد تخفیف ساخته شد!*\nکد: `{code}`", reply_markup=admin_inline_keyboard(db))
 
+        # ساخت کد نمایندگی درصدی
+        elif state == "adm_wait_disc_res_code":
+            temp_clients[ADMIN_ID] = {"disc_code": message.text.strip().upper()}; user_states[user_id] = "adm_wait_disc_res_val"
+            return await message.answer("💰 این کد چند درصد به کاربر تخفیف همیشگی بدهد؟ (مثلاً 50):", reply_markup=cancel_keyboard())
+        elif state == "adm_wait_disc_res_val":
+            if not message.text.isdigit(): return await message.answer("❌ عدد وارد کنید.")
+            temp_clients[ADMIN_ID]["disc_val"] = int(message.text); user_states[user_id] = "adm_wait_disc_res_uses"
+            return await message.answer("👥 ظرفیت استفاده از این کد (چند نفر):", reply_markup=cancel_keyboard())
+        elif state == "adm_wait_disc_res_uses":
+            if not message.text.isdigit(): return await message.answer("❌ عدد وارد کنید.")
+            temp_clients[ADMIN_ID]["disc_uses"] = int(message.text)
+            kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✅ بله", callback_data="adm_disc_comb_yes", style=ButtonStyle.SUCCESS)], [InlineKeyboardButton(text="❌ خیر", callback_data="adm_disc_comb_no", style=ButtonStyle.DANGER)]])
+            return await message.answer("آیا این تخفیف با پنل اصلی ۲۵۰ تومنی (فول نمایندگی) قابل ترکیب است؟", reply_markup=kb)
+
         elif state == "adm_wait_fjoin_id":
             temp_clients[ADMIN_ID] = {"fjoin_id": message.text}; user_states[user_id] = "adm_wait_fjoin_name"
             return await message.answer("📝 نام کانال (برای نمایش روی دکمه):", reply_markup=cancel_keyboard())
@@ -604,12 +612,39 @@ async def message_handler(message: types.Message):
             users = [u for u in users if sq in db[u].get("first_name", "").lower() or sq in db[u].get("username", "").lower() or sq in str(db[u].get("phone", "")) or sq in u]
             return await message.answer("🔍 نتیجه جستجوی نمایندگان:", reply_markup=generate_4col_users_keyboard(db, users, 0, "adm_reseller", [[InlineKeyboardButton(text="🔍 سرچ مجدد", callback_data="adm_search_reseller", style=ButtonStyle.PRIMARY)], [InlineKeyboardButton(text="🔙 بازگشت", callback_data="menu_admin", style=ButtonStyle.DANGER)]]))
 
+        elif state.startswith("wait_admin_msg_1_"):
+            target, amount, r_type = state.split("_")[3], state.split("_")[4], state.split("_")[5]
+            try: await bot.send_message(int(target), f"پیام مدیریت بابت خرید شما:\n\n💬 {message.text}")
+            except: pass
+            del user_states[user_id]
+            return await message.answer("✅ پیام به کاربر ارسال شد.", reply_markup=admin_inline_keyboard(db))
+
     if not db["config"]["is_active"] and user_id != ADMIN_ID: 
         return await message.answer("⚠️ *فروشگاه در حال بروزرسانی است.*")
 
+    if state == "wait_req_disc_reseller":
+        code = message.text.strip().upper()
+        conf = db["config"]
+        if code not in conf.get("discount_reseller_codes", {}): return await message.answer("❌ کد نامعتبر است.")
+        gift = conf["discount_reseller_codes"][code]
+        if gift["uses"] <= 0: return await message.answer("❌ ظرفیت تکمیل است.")
+        if user_id in gift["used_by"]: return await message.answer("❌ قبلاً استفاده کردید!")
+        if db[str(user_id)].get("is_reseller") and not gift["combinable"]: return await message.answer("❌ این کد با نمایندگی فول قابل ترکیب نیست!")
+        
+        gift["uses"] -= 1
+        gift["used_by"].append(user_id)
+        db[str(user_id)]["is_discount_reseller"] = True
+        db[str(user_id)]["discount_percent"] = gift["percent"]
+        save_db(db); del user_states[user_id]
+        return await message.answer(f"🎉 تبریک! شما نماینده درصدی ما شدید و از این پس {gift['percent']}% تخفیف روی تمام خریدهای میلی‌آمپر خواهید داشت.", reply_markup=main_menu_keyboard(db, user_id))
+
     if state == "wait_mah_amount":
         if not message.text.isdigit(): return await message.answer("❌ لطفاً فقط عدد بفرستید.", reply_markup=cancel_keyboard())
-        amount = int(message.text); price = amount * db["config"]["price_per_mah"]
+        amount = int(message.text)
+        ppc = db["config"]["price_per_mah"]
+        disc_p = db[str(user_id)].get("discount_percent", 0)
+        actual_ppc = ppc * (100 - disc_p) / 100
+        price = int(amount * actual_ppc)
         user_states[user_id] = f"wait_method_{amount}_{price}_NONE"
         text = f"🔋 سبد خرید: *{amount:,}* میلی‌آمپر\n💰 قابل پرداخت: `{price:,}` تومان\n\nلطفا روش پرداخت را انتخاب کنید:"
         return await message.answer(text, reply_markup=payment_method_keyboard(db, amount, price))
@@ -633,6 +668,7 @@ async def message_handler(message: types.Message):
         except: pass
         return
 
+    # سیستم فروش نمایندگی
     elif state == "wait_resell_sell_price":
         if not message.text.isdigit(): return await message.answer("❌ فقط عدد بفرستید.")
         temp_clients[user_id]["sell_price"] = int(message.text)
@@ -689,7 +725,7 @@ async def message_handler(message: types.Message):
     elif state == "wait_change_phone":
         if message.contact: 
             if message.contact.user_id != message.from_user.id:
-                return await message.answer("❌ لطفاً فقط شماره اصلی خودتان را با استفاده از دکمه «ارسال شماره» بفرستید!")
+                return await message.answer("❌ لطفاً فقط از دکمه پایین برای ارسال شماره خودتان استفاده کنید!")
             phone = message.contact.phone_number
         else: return await message.answer("❌ لطفاً فقط از دکمه پایین استفاده کنید.")
         if phone.startswith("00"): phone = phone[2:]
@@ -702,22 +738,23 @@ async def message_handler(message: types.Message):
 
     elif state in ["wait_phone", "resell_wait_phone"]:
         is_reseller_add = (state == "resell_wait_phone")
-        kb_phone = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="📲 ارسال شماره به ربات", request_contact=True)]], resize_keyboard=True)
         if message.contact: 
             if message.contact.user_id != message.from_user.id and not is_reseller_add:
-                return await message.answer("❌ لطفاً فقط شماره اصلی خودتان را با استفاده از دکمه پایین بفرستید!", reply_markup=kb_phone)
+                return await message.answer("❌ لطفاً فقط شماره اصلی خودتان را با استفاده از دکمه پایین بفرستید!")
             phone = message.contact.phone_number
-        else: return await message.answer("❌ لطفاً فقط از دکمه «ارسال شماره به ربات» استفاده کنید.", reply_markup=kb_phone)
+        elif is_reseller_add and message.text: # نماینده میتونه تایپ کنه
+            phone = message.text.replace(" ", "").replace("-", "").replace("+", "")
+        else: return await message.answer("❌ لطفاً فقط از دکمه پایین استفاده کنید.")
+        
         if phone.startswith("00"): phone = phone[2:]
         elif phone.startswith("09") and len(phone) == 11: phone = "98" + phone[1:]
         if not phone.startswith("+"): phone = "+" + phone
         
         msg = await message.answer("✅ دریافت شد.", reply_markup=ReplyKeyboardRemove()); await msg.delete() 
-        await message.answer("⏳ ارتباط با سرورهای تلگرام...")
+        await message.answer("⏳ در حال ارتباط با سرورهای تلگرام...")
         
-        brand = db[str(user_id)].get("brand_name", "nitroself") if is_reseller_add else "nitroself"
-        if not brand: brand = "nitroself"
-        temp_client = PyroClient(f"temp_{user_id}_{int(time.time())}", api_id=API_ID, api_hash=API_HASH, in_memory=True, app_version=brand, device_model=brand)
+        # استفاده از کلاینت استاندارد برای جلوگیری از بلاک شدن لاگین
+        temp_client = PyroClient(f"temp_{user_id}_{int(time.time())}", api_id=API_ID, api_hash=API_HASH, in_memory=True)
         await temp_client.connect()
         try:
             sent_code = await temp_client.send_code(phone)
@@ -725,7 +762,10 @@ async def message_handler(message: types.Message):
             user_states[user_id] = "wait_code"
             msg = f"📲 *کد تایید به تلگرام ارسال شد!*\n🔒 لطفاً کد را با دکمه‌های زیر وارد کنید:\n\n💬 **کد وارد شده:** `...`"
             await message.answer(msg, reply_markup=get_numpad_keyboard("kp_logcode"))
-        except Exception as e: await message.answer(f"❌ خطا: {e}", reply_markup=cancel_keyboard()); await temp_client.disconnect()
+        except Exception as e: 
+            await message.answer(f"❌ خطا در ارسال کد: {e}", reply_markup=cancel_keyboard())
+            try: await temp_client.disconnect()
+            except: pass
         return
 
     elif state == "wait_code":
@@ -813,7 +853,9 @@ async def query_handler(callback_query: types.CallbackQuery):
             
             if kp_type == "buy":
                 amount = int(current_val)
-                price = amount * db["config"]["price_per_mah"]
+                disc_p = db[str(user_id)].get("discount_percent", 0)
+                actual_ppc = db["config"]["price_per_mah"] * (100 - disc_p) / 100
+                price = int(amount * actual_ppc)
                 user_states[user_id] = f"wait_method_{amount}_{price}_NONE"
                 text = f"🔋 سبد خرید: *{amount:,}* میلی‌آمپر\n💰 قابل پرداخت: `{price:,}` تومان\n\nلطفا روش پرداخت را انتخاب کنید:"
                 return await callback_query.message.edit_text(text, reply_markup=payment_method_keyboard(db, amount, price))
@@ -871,8 +913,10 @@ async def query_handler(callback_query: types.CallbackQuery):
         temp_clients[user_id]["val"] = current_val
         if kp_type == "buy":
             ppc = db["config"]["price_per_mah"]
+            disc_p = db[str(user_id)].get("discount_percent", 0)
+            actual_ppc = ppc * (100 - disc_p) / 100
             disp = f"{int(current_val):,}" if current_val else "0"
-            msg = f"🔋 *خرید شارژ پاوربانک*\n\nقیمت هر میلی‌آمپر: `{ppc}` تومان\n\n🔢 **مقدار مورد نیاز:** `{disp}` میلی‌آمپر"
+            msg = f"🔋 *خرید شارژ پاوربانک*\n\nقیمت هر میلی‌آمپر: `{actual_ppc}` تومان\n\n🔢 **مقدار مورد نیاز:** `{disp}` میلی‌آمپر"
         elif kp_type == "trans":
             disp = f"{int(current_val):,}" if current_val else "0"
             msg = f"💸 *انتقال میلی‌آمپر به دوست*\n\nآیدی مقصد: `{temp_clients[user_id].get('target_uid')}`\n\n🔢 **مبلغ انتقال:** `{disp}`"
@@ -915,10 +959,13 @@ async def query_handler(callback_query: types.CallbackQuery):
     elif data == "menu_my_sub": await send_manage_self_menu(db, user_id, callback_query)
         
     elif data == "menu_buy_mah":
-        user_states[user_id] = "wait_mah_amount"; ppc = db["config"]["price_per_mah"]
+        user_states[user_id] = "wait_mah_amount"
         if user_id not in temp_clients: temp_clients[user_id] = {}
         temp_clients[user_id]["val"] = ""
-        msg = f"🔋 *خرید شارژ پاوربانک*\n\nقیمت هر میلی‌آمپر: `{ppc}` تومان\n\n🔢 **مقدار مورد نیاز:** `0` میلی‌آمپر"
+        ppc = db["config"]["price_per_mah"]
+        disc_p = db[str(user_id)].get("discount_percent", 0)
+        actual_ppc = ppc * (100 - disc_p) / 100
+        msg = f"🔋 *خرید شارژ پاوربانک*\n\nقیمت هر میلی‌آمپر: `{actual_ppc}` تومان\n\n🔢 **مقدار مورد نیاز:** `0` میلی‌آمپر"
         await callback_query.message.edit_text(msg, reply_markup=get_numpad_keyboard("kp_buy"))
 
     elif data == "menu_my_account":
@@ -944,7 +991,8 @@ async def query_handler(callback_query: types.CallbackQuery):
     elif data == "menu_referral":
         me = await bot.get_me()
         link = f"https://t.me/{me.username}?start={user_id}"
-        msg = f"🎁 **کسب درآمد از طریق معرفی دوستان!**\n\nبا ارسال لینک اختصاصی زیر برای دوستانتان، پس از ورود و عضویت آن‌ها در کانال‌های اسپانسر، به صورت خودکار `500` میلی‌آمپر هدیه می‌گیرید.\n\n🔗 لینک دعوت شما:\n`{link}`"
+        invites = len([x for x in db if x != "config" and x != "reseller_market" and x.isdigit() and db[x].get('invited_by') == user_id and db[x].get('fjoin_passed')])
+        msg = f"🎁 **کسب درآمد از طریق معرفی دوستان!**\n\nتعداد زیرمجموعه موفق شما: `{invites}` نفر\n\nبا ارسال لینک اختصاصی زیر برای دوستانتان، پس از ورود و عضویت آن‌ها در کانال‌های اسپانسر، به صورت خودکار `500` میلی‌آمپر هدیه می‌گیرید.\n\n🔗 لینک دعوت شما:\n`{link}`"
         await callback_query.message.edit_text(msg, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 بازگشت", callback_data="menu_main", style=ButtonStyle.DANGER)]]))
 
     elif data == "menu_what_is":
@@ -969,14 +1017,31 @@ async def query_handler(callback_query: types.CallbackQuery):
     
     # ------------------ سیستم فروش نمایندگی ------------------
     elif data == "resell_sell_panel":
+        if not db[str(user_id)].get("is_reseller"):
+            return await callback_query.answer("❌ شما نماینده نیستید!", show_alert=True)
+        # در صورت وجود در بازارچه
+        if str(user_id) in db.get("reseller_market", {}):
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="❌ انصراف از فروش (خروج از بازارچه)", callback_data="r_sell_cancel", style=ButtonStyle.DANGER)],
+                [InlineKeyboardButton(text="🔙 بازگشت", callback_data="menu_reseller_panel", style=ButtonStyle.PRIMARY)]
+            ])
+            return await callback_query.message.edit_text("🛒 پنل شما در حال حاضر در بازارچه برای فروش قرار دارد.", reply_markup=kb)
+
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="👤 فروش به آیدی خاص", callback_data="r_sell_type_private", style=ButtonStyle.PRIMARY)],
             [InlineKeyboardButton(text="🌐 فروش همگانی (بازارچه)", callback_data="r_sell_type_public", style=ButtonStyle.SUCCESS)],
             [InlineKeyboardButton(text="🔙 بازگشت", callback_data="menu_reseller_panel", style=ButtonStyle.DANGER)]
         ])
         await callback_query.message.edit_text("🛒 **فروش نمایندگی شما**\n\nلطفاً نحوه فروش را انتخاب کنید:", reply_markup=kb)
+        
+    elif data == "r_sell_cancel":
+        if str(user_id) in db.get("reseller_market", {}):
+            del db["reseller_market"][str(user_id)]
+            save_db(db)
+        await callback_query.message.edit_text("✅ پنل شما از لیست فروش خارج شد.", reply_markup=main_menu_keyboard(db, user_id))
 
     elif data.startswith("r_sell_type_"):
+        if not db[str(user_id)].get("is_reseller"): return await callback_query.answer("❌ شما نماینده نیستید!", show_alert=True)
         sell_type = data.split("_")[3]
         user_states[user_id] = "wait_resell_sell_price"
         if user_id not in temp_clients: temp_clients[user_id] = {}
@@ -984,6 +1049,7 @@ async def query_handler(callback_query: types.CallbackQuery):
         await callback_query.message.edit_text("💰 لطفاً قیمت پیشنهادی خود برای فروش پنل نمایندگی را به تومان وارد کنید:", reply_markup=cancel_keyboard())
         
     elif data.startswith("r_sell_cust_"):
+        if not db[str(user_id)].get("is_reseller"): return await callback_query.answer("❌ نماینده نیستید!", show_alert=True)
         ans = data.split("_")[3]
         temp_clients[user_id]["trans_c"] = (ans == "yes")
         if temp_clients[user_id].get("sell_is_public"):
@@ -1001,14 +1067,38 @@ async def query_handler(callback_query: types.CallbackQuery):
             user_states[user_id] = "wait_resell_sell_uid"
             await callback_query.message.edit_text("🆔 لطفاً آیدی عددی فردی که قصد فروش پنل به او را دارید وارد کنید:", reply_markup=cancel_keyboard())
 
+    elif data == "menu_req_reseller":
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💳 خرید پنل فول (کارت به کارت)", callback_data="req_res_card", style=ButtonStyle.PRIMARY)],
+            [InlineKeyboardButton(text="🛒 خرید از بازارچه (نمایندگان دیگر)", callback_data="menu_market", style=ButtonStyle.SUCCESS)],
+            [InlineKeyboardButton(text="🎁 فعال‌سازی نمایندگی درصدی (کد ادمین)", callback_data="req_res_code", style=ButtonStyle.SUCCESS)],
+            [InlineKeyboardButton(text="🔙 بازگشت", callback_data="menu_main", style=ButtonStyle.DANGER)]
+        ])
+        gw = db["config"].get("gateway", {})
+        if gw.get("active") and gw.get("merchant"):
+            kb.inline_keyboard.insert(1, [InlineKeyboardButton(text="🌐 پرداخت آنلاین (درگاه امن)", url=f"https://zarinpal.com/pg/StartPay/{gw['merchant']}?amount=250000", style=ButtonStyle.PRIMARY)])
+            
+        text = f"🤝 **منوی نمایندگی سلف‌ربات**\n\n🔹 **نمایندگی فول (۲۵۰ هزار تومان):** امکان ورود مشتری با نام برند خودتان، مدیریت کامل و...\n🔹 **نمایندگی درصدی (رایگان):** دریافت تخفیف دائمی درصدی روی خریدهای میلی‌آمپر (نیازمند هماهنگی با پشتیبانی و دریافت کد)."
+        await callback_query.message.edit_text(text, reply_markup=kb)
+        
+    elif data == "req_res_card":
+        user_states[user_id] = f"wait_reseller_receipt"
+        text = f"💳 *شماره کارت جهت واریز دستی:*\n`{CARD_NUMBER}`\n👤 بنام: {CARD_NAME}\n\nمبلغ واریز: `250,000` تومان\n\n📸 *لطفاً عکس رسید را همینجا ارسال کنید:*"
+        await callback_query.message.edit_text(text, reply_markup=cancel_keyboard())
+
+    elif data == "req_res_code":
+        user_states[user_id] = "wait_req_disc_reseller"
+        await callback_query.message.edit_text("🔑 لطفاً کد فعال‌سازی نمایندگی درصدی که از پشتیبانی دریافت کرده‌اید را بفرستید:", reply_markup=cancel_keyboard())
+
     elif data == "menu_market":
         market = db.get("reseller_market", {})
-        if not market:
+        public_market = {k: v for k, v in market.items() if k != str(user_id)}
+        if not public_market:
             return await callback_query.answer("🛒 در حال حاضر هیچ پنل نمایندگی برای فروش در بازارچه وجود ندارد.", show_alert=True)
             
         kb = []
-        for seller_id, info in market.items():
-            kb.append([InlineKeyboardButton(text=f"برند نماینده | {info['price']:,} تومان", callback_data=f"buy_public_resell_{seller_id}", style=ButtonStyle.PRIMARY)])
+        for seller_id, info in public_market.items():
+            kb.append([InlineKeyboardButton(text=f"پنل نماینده {seller_id[:4]} | {info['price']:,} تومان", callback_data=f"buy_public_resell_{seller_id}", style=ButtonStyle.PRIMARY)])
         kb.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="menu_req_reseller", style=ButtonStyle.DANGER)])
         await callback_query.message.edit_text("🛒 **بازارچه خرید نمایندگی**\n\nلیست پنل‌های موجود برای خرید:", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
 
@@ -1035,6 +1125,7 @@ async def query_handler(callback_query: types.CallbackQuery):
     elif data.startswith("transfer_resell_"):
         buyer_id = data.split("_")[2]
         seller_id = str(user_id)
+        if not db[str(user_id)].get("is_reseller"): return await callback_query.answer("❌ شما نماینده نیستید!", show_alert=True)
         
         trans_c = False
         market_info = db.get("reseller_market", {}).get(seller_id)
@@ -1066,24 +1157,8 @@ async def query_handler(callback_query: types.CallbackQuery):
         try: await bot.send_message(int(buyer_id), "❌ متاسفانه رسید شما توسط فروشنده تایید نشد.")
         except: pass
 
-    # ---------------- بخش نمایندگی ----------------
-    elif data == "menu_req_reseller":
-        user_states[user_id] = f"wait_reseller_receipt"
-        text = f"🤝 **درخواست پنل نمایندگی**\n\nبا خرید این پنل، شما امکان فروش سلف‌ها به نام و برند خود را خواهید داشت.\n💰 **هزینه فعال‌سازی:** `250,000` تومان (مقطوع)\n\n"
-        kb = []
-        gw = db["config"].get("gateway", {})
-        if gw.get("active") and gw.get("merchant"):
-            kb.append([InlineKeyboardButton(text="🌐 پرداخت آنلاین (درگاه امن)", url=f"https://zarinpal.com/pg/StartPay/{gw['merchant']}?amount=250000", style=ButtonStyle.PRIMARY)])
-        
-        market = db.get("reseller_market", {})
-        if market:
-            kb.append([InlineKeyboardButton(text="🛒 خرید از بازارچه نمایندگان", callback_data="menu_market", style=ButtonStyle.SUCCESS)])
-            
-        kb.append([InlineKeyboardButton(text="❌ انصراف", callback_data="cancel_action", style=ButtonStyle.DANGER)])
-        text += f"💳 *شماره کارت جهت واریز دستی:*\n`{CARD_NUMBER}`\n👤 بنام: {CARD_NAME}\n\n📸 *لطفاً عکس رسید را همینجا ارسال کنید:*"
-        await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
-        
     elif data == "menu_reseller_panel":
+        if not db[str(user_id)].get("is_reseller"): return await callback_query.answer("❌ شما نماینده نیستید!", show_alert=True)
         brand = db[str(user_id)].get("brand_name", "")
         text = f"🏢 **پنل مدیریت نمایندگی شما**\n\n✨ برند شما: `{brand or 'بدون نام'}`\n\nاز طریق منوی زیر می‌توانید اکانت مشتریان خود را مدیریت کنید."
         kb = [
@@ -1096,19 +1171,21 @@ async def query_handler(callback_query: types.CallbackQuery):
         await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
         
     elif data == "resell_change_brand":
+        if not db[str(user_id)].get("is_reseller"): return
         user_states[user_id] = "wait_brand_name"
         await callback_query.message.edit_text("✏️ لطفاً نام برند جدید خود را تایپ کرده و ارسال کنید:", reply_markup=cancel_keyboard())
     elif data == "resell_add_acc":
+        if not db[str(user_id)].get("is_reseller"): return
         user_states[user_id] = "resell_wait_phone"
-        kb_phone = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="📲 ارسال شماره مشتری", request_contact=True)]], resize_keyboard=True)
-        await callback_query.message.delete()
-        await bot.send_message(user_id, "📱 لطفاً شماره تلگرام مشتری را از طریق دکمه زیر بفرستید 👇", reply_markup=kb_phone)
+        await callback_query.message.edit_text("📱 لطفاً شماره تلگرام مشتری را وارد کنید:\n\nمثال: `+989123456789`", reply_markup=cancel_keyboard())
     elif data.startswith("resell_manage_acc_page_"):
+        if not db[str(user_id)].get("is_reseller"): return
         page = int(data.split("_")[4])
         users = [u for u in db if u != "config" and u != "reseller_market" and u.isdigit() and db[u].get("reseller_owner") == user_id]
         await callback_query.message.edit_text("👥 **لیست مشتریان شما:**", reply_markup=generate_4col_users_keyboard(db, users, page, "resell_user", [[InlineKeyboardButton(text="🔙 بازگشت به پنل نمایندگی", callback_data="menu_reseller_panel", style=ButtonStyle.DANGER)]]))
 
     elif data.startswith("resell_user_info_"):
+        if not db[str(user_id)].get("is_reseller"): return
         target = data.split("resell_user_info_")[1]
         ud = db.get(target, {})
         text = f"👤 **اطلاعات مشتری شما**\n\n🆔 آیدی: `{target}`\nنام: `{ud.get('first_name', '')}`\nیوزرنیم: `@{ud.get('username', '')}`\nشماره: `{ud.get('phone', 'ندارد')}`\n💰 موجودی: `{ud.get('mah_balance', 0)}`\nوضعیت سلف: `{ud.get('status', 'نامشخص')}`"
@@ -1120,6 +1197,7 @@ async def query_handler(callback_query: types.CallbackQuery):
         await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
         
     elif data.startswith("resell_addmah_"):
+        if not db[str(user_id)].get("is_reseller"): return
         target = data.split("_")[2]
         if user_id not in temp_clients: temp_clients[user_id] = {}
         temp_clients[user_id]["target_uid"] = target
@@ -1128,6 +1206,7 @@ async def query_handler(callback_query: types.CallbackQuery):
         await callback_query.message.edit_text("💰 چه مقدار میلی آمپر از حساب شما به این مشتری منتقل شود؟\n\n🔢 **مقدار:** `0`", reply_markup=get_numpad_keyboard("kp_addmah"))
 
     elif data.startswith("resell_editmods_"):
+        if not db[str(user_id)].get("is_reseller"): return
         target = data.split("_")[2]
         await callback_query.message.edit_text(get_app_store_text(db, target), reply_markup=app_store_keyboard(db, target), parse_mode="Markdown")
 
@@ -1136,19 +1215,36 @@ async def query_handler(callback_query: types.CallbackQuery):
         if user_id != ADMIN_ID: return
         await callback_query.message.edit_text("👨‍💻 *پنل مدیریت*", reply_markup=admin_inline_keyboard(db))
 
+    elif data == "adm_disc_reseller":
+        if user_id != ADMIN_ID: return
+        user_states[user_id] = "adm_wait_disc_res_code"
+        await callback_query.message.edit_text("🎁 لطفاً یک کد (حروف انگلیسی/عدد) برای کد تخفیف نمایندگی بفرستید:", reply_markup=cancel_keyboard())
+    elif data == "adm_disc_comb_yes":
+        if user_id != ADMIN_ID: return
+        db["config"]["discount_reseller_codes"][temp_clients[ADMIN_ID]["disc_code"]] = {
+            "percent": temp_clients[ADMIN_ID]["disc_val"], "uses": temp_clients[ADMIN_ID]["disc_uses"], "combinable": True, "used_by": []
+        }
+        save_db(db); del user_states[user_id]
+        await callback_query.message.edit_text(f"✅ کد تخفیف نمایندگی {temp_clients[ADMIN_ID]['disc_code']} ساخته شد.", reply_markup=admin_inline_keyboard(db))
+    elif data == "adm_disc_comb_no":
+        if user_id != ADMIN_ID: return
+        db["config"]["discount_reseller_codes"][temp_clients[ADMIN_ID]["disc_code"]] = {
+            "percent": temp_clients[ADMIN_ID]["disc_val"], "uses": temp_clients[ADMIN_ID]["disc_uses"], "combinable": False, "used_by": []
+        }
+        save_db(db); del user_states[user_id]
+        await callback_query.message.edit_text(f"✅ کد تخفیف نمایندگی {temp_clients[ADMIN_ID]['disc_code']} ساخته شد.", reply_markup=admin_inline_keyboard(db))
+
     elif data == "adm_reload_db":
         if user_id != ADMIN_ID: return
         await callback_query.answer("⏳ در حال دریافت فایل...", show_alert=False)
         try:
-            import requests
             url = f"https://huggingface.co/datasets/{REPO_ID}/resolve/main/{DB_FILE}"
             headers = {"Authorization": f"Bearer {HF_TOKEN}"} if HF_TOKEN else {}
             res = requests.get(url, headers=headers)
             if res.status_code == 200:
                 with open(DB_FILE, "wb") as f: f.write(res.content)
         except: pass
-        global _db
-        _db = load_db()
+        global _db; _db = load_db()
         await callback_query.message.edit_reply_markup(reply_markup=admin_inline_keyboard(_db))
         await bot.send_message(user_id, "✅ دیتابیس با موفقیت بازخوانی شد!")
         
@@ -1279,12 +1375,8 @@ async def query_handler(callback_query: types.CallbackQuery):
         if saved_phone:
             await callback_query.message.edit_text(f"⏳ در حال ارتباط با سرورهای تلگرام با شماره ثبت‌شده (`{saved_phone}`)...")
             
-            brand = "nitroself"
-            if db[str(user_id)].get("is_reseller"): brand = db[str(user_id)].get("brand_name", "nitroself")
-            if not brand: brand = "nitroself"
-            
-            # اتصال و خروج نشست قبلی با هش برای جلوگیری از باگ تکرار شماره
-            temp_client = PyroClient(f"temp_{user_id}_{int(time.time())}", api_id=API_ID, api_hash=API_HASH, in_memory=True, app_version=brand, device_model=brand)
+            # کلاینت دیفالت برای رفع ارور مسدودی لاگین
+            temp_client = PyroClient(f"temp_{user_id}_{int(time.time())}", api_id=API_ID, api_hash=API_HASH, in_memory=True)
             await temp_client.connect()
             try:
                 sent_code = await temp_client.send_code(saved_phone)
@@ -1372,13 +1464,8 @@ async def query_handler(callback_query: types.CallbackQuery):
     elif data.startswith("approve_resell_"):
         if user_id != ADMIN_ID: return
         customer_id = int(data.split("_")[2])
-        db[str(customer_id)]["is_reseller"] = True
-        save_db(db)
-        await callback_query.message.edit_reply_markup(reply_markup=None)
-        await callback_query.message.answer("✅ نمایندگی تایید شد.")
-        try: 
-            await bot.send_message(customer_id, "🎉 درخواست نمایندگی شما با موفقیت تایید شد!\nجهت شروع، روی دکمه نمایندگی کلیک کنید تا برند خود را ثبت کنید.")
-        except: pass
+        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="بله", callback_data=f"appr_msg_yes_{customer_id}_resell_0"), InlineKeyboardButton(text="خیر", callback_data=f"appr_msg_no_{customer_id}_resell_0")]])
+        await callback_query.message.edit_text("آیا پیامی برای این کاربر دارید؟", reply_markup=kb)
 
     elif data.startswith("reject_resell_"):
         if user_id != ADMIN_ID: return
@@ -1390,16 +1477,33 @@ async def query_handler(callback_query: types.CallbackQuery):
 
     elif data.startswith("approve_"):
         if user_id != ADMIN_ID: return
-        parts = data.split("_"); customer_id, amount, code = int(parts[1]), int(parts[2]), parts[3]
-        db[str(customer_id)]["mah_balance"] += amount
-        if code != "NONE" and code in db["config"]["gift_codes"]:
-            db["config"]["gift_codes"][code]["uses"] -= 1; db["config"]["gift_codes"][code]["used_by"].append(customer_id)
-        save_db(db)
-        await callback_query.message.edit_reply_markup(reply_markup=None)
-        await callback_query.message.answer("✅ تایید شد.")
-        try: await bot.send_message(customer_id, f"✅ *خرید تایید شد!*\nمقدار `{amount:,}` میلی‌آمپر اضافه شد.")
-        except: pass
+        parts = data.split("_"); customer_id, amount, code = parts[1], parts[2], parts[3]
+        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="بله", callback_data=f"appr_msg_yes_{customer_id}_mah_{amount}"), InlineKeyboardButton(text="خیر", callback_data=f"appr_msg_no_{customer_id}_mah_{amount}")]])
+        if code != "NONE": 
+            if code in db["config"]["gift_codes"]: db["config"]["gift_codes"][code]["uses"] -= 1; db["config"]["gift_codes"][code]["used_by"].append(int(customer_id)); save_db(db)
+        await callback_query.message.edit_text("آیا پیامی برای این کاربر دارید؟", reply_markup=kb)
         
+    elif data.startswith("appr_msg_no_"):
+        if user_id != ADMIN_ID: return
+        parts = data.split("_"); target, r_type, amount = int(parts[3]), parts[4], int(parts[5])
+        if r_type == "resell":
+            db[str(target)]["is_reseller"] = True; save_db(db)
+            try: await bot.send_message(target, "🎉 درخواست نمایندگی شما با موفقیت تایید شد!\nجهت شروع، روی دکمه نمایندگی کلیک کنید تا برند خود را ثبت کنید.")
+            except: pass
+        elif r_type == "mah":
+            db[str(target)]["mah_balance"] += amount; save_db(db)
+            try: await bot.send_message(target, f"✅ *خرید تایید شد!*\nمقدار `{amount:,}` میلی‌آمپر اضافه شد.")
+            except: pass
+        await callback_query.message.edit_text("✅ عملیات با موفقیت تایید شد.")
+        
+    elif data.startswith("appr_msg_yes_"):
+        if user_id != ADMIN_ID: return
+        parts = data.split("_"); target, r_type, amount = int(parts[3]), parts[4], int(parts[5])
+        if r_type == "resell": db[str(target)]["is_reseller"] = True; save_db(db)
+        elif r_type == "mah": db[str(target)]["mah_balance"] += amount; save_db(db)
+        user_states[user_id] = f"wait_admin_msg_1_{target}_{amount}_{r_type}"
+        await callback_query.message.edit_text("💬 لطفاً پیام خود را برای کاربر بفرستید:")
+
     elif data.startswith("reject_"):
         if user_id != ADMIN_ID: return
         customer_id = int(data.split("_")[1])
@@ -1453,7 +1557,7 @@ async def finalize_login(user_id, tc, message):
         await bot.send_message(user_id, text, reply_markup=app_store_keyboard(db, user_id), parse_mode="Markdown")
 
 async def main():
-    print("🚀 Master Bot is starting (Colors Handled Properly)...")
+    print("🚀 Master Bot is starting (Colors Safely Hardcoded)...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
