@@ -164,8 +164,8 @@ def register_handlers(app, uid):
             "first_comment_channels": set(), "first_comment_text": "اول! 🚀", "welcome_status": False, "welcome_text": "🌹 کاربر عزیز {name}، به گروه خوش آمدید!", "welcome_media": None
         }
 
-    async def safe_edit(message, text):
-        try: await message.edit_text(text, disable_web_page_preview=True)
+    async def safe_edit(message, text, mode=enums.ParseMode.DEFAULT):
+        try: await message.edit_text(text, disable_web_page_preview=True, parse_mode=mode)
         except: pass
 
     async def locked_msg(message):
@@ -255,7 +255,7 @@ def register_handlers(app, uid):
             return await safe_edit(message, "⏱ **ارسال زمان‌دار**\n\n🔸 `.زماندار [دقیقه] [متن پیام]`")
         mins = int(parts[1])
         text = parts[2]
-        msg = await message.edit_text(f"✅ پیام شما ذخیره شد و `{mins}` دقیقه دیگر در همین چت ارسال می‌شود.")
+        msg = await message.edit_text(f"✅ پیام شما ذخیره شد و `{mins}` دقیقه دیگر ارسال می‌شود.")
         await asyncio.sleep(0.5) 
         try: await msg.delete()
         except: pass
@@ -1065,16 +1065,16 @@ def register_handlers(app, uid):
         m = USER_SETTINGS[uid]["text_mode"]
         if m and not message.text.startswith((".", "/")):
             txt = message.text
-            if m == "بولد": fmt = f"<b>{txt}</b>"
-            elif m == "کج": fmt = f"<i>{txt}</i>"
-            elif m == "مونو": fmt = f"<code>{txt}</code>"
-            elif m == "خط‌خورده": fmt = f"<s>{txt}</s>"
-            elif m == "زیرخط": fmt = f"<u>{txt}</u>"
-            elif m == "نقل‌قول": fmt = f"<blockquote>{txt}</blockquote>"
-            elif m == "اسپویلر": fmt = f"<tg-spoiler>{txt}</tg-spoiler>"
-            elif m == "link": fmt = f"<a href='{USER_SETTINGS[uid].get('text_link', '')}'>{txt}</a>"
-            else: fmt = txt
-            try: await message.edit_text(fmt, disable_web_page_preview=True, parse_mode=enums.ParseMode.HTML)
+            if m == "بولد": fmt = f"<b>{txt}</b>"; parse_mode = enums.ParseMode.HTML
+            elif m == "کج": fmt = f"<i>{txt}</i>"; parse_mode = enums.ParseMode.HTML
+            elif m == "مونو": fmt = f"<code>{txt}</code>"; parse_mode = enums.ParseMode.HTML
+            elif m == "خط‌خورده": fmt = f"<s>{txt}</s>"; parse_mode = enums.ParseMode.HTML
+            elif m == "زیرخط": fmt = f"<u>{txt}</u>"; parse_mode = enums.ParseMode.HTML
+            elif m == "نقل‌قول": fmt = f"<blockquote expandable>{txt}</blockquote>"; parse_mode = enums.ParseMode.HTML
+            elif m == "اسپویلر": fmt = f"<tg-spoiler>{txt}</tg-spoiler>"; parse_mode = enums.ParseMode.HTML
+            elif m == "link": fmt = f"<a href='{USER_SETTINGS[uid].get('text_link', '')}'>{txt}</a>"; parse_mode = enums.ParseMode.HTML
+            else: fmt = txt; parse_mode = enums.ParseMode.DEFAULT
+            try: await message.edit_text(fmt, disable_web_page_preview=True, parse_mode=parse_mode)
             except: pass
 
 running_clients = {}
