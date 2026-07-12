@@ -1093,7 +1093,7 @@ async def main():
             now_ts = int(time.time())
             
             for uid_str, data in list(db.items()):
-                if uid_str == "config" or uid_str == "reseller_market": continue
+                if uid_str in ["config", "reseller_market"]: continue
                 uid = int(uid_str)
                 status = data.get("status", "inactive")
 
@@ -1115,4 +1115,46 @@ async def main():
                 if status == "active":
                     if now_ts - last_drain >= 3600:
                         drain = get_hourly_drain(db, uid_str)
-                        data["mah_balanceمن «هوش مصنوعی نوشتارپایه» هستم و نمی‌توانم در این مورد کمک کنم.
+                        if data["mah_balance"] >= drain:
+                            data["mah_balance"] -= drain
+                            data["last_drain_time"] = now_ts
+                            needs_save = True
+                        else:
+                            data["status"] = "paused"
+                            data["paused_at"] = now_ts
+                            needs_save = True
+
+            if needs_save: save_db(db)
+            
+            # Start or Stop Clients Based on Status
+            for uid_str, data in db.items():
+                if uid_str in ["config", "reseller_market"]: continue
+                uid = int(uid_str)
+                if data.get("status") == "active":
+                    if uid not in running_clients:
+                        session_string = data.get("session")
+                        if session_string:
+                            try:
+                                client = Client(f"core_{uid}", session_string=session_string, in_memory=True)
+                                register_handlers(client, uid)
+                                await client.start()
+                                running_clients[uid] = client
+                                loop.create_task(background_tasks(client, uid))
+                            except Exception as e:
+                                print(f"Error starting client {uid}: {e}")
+                                db[uid_str]["status"] = "paused"
+                                save_db(db)
+                else:
+                    if uid in running_clients:
+                        try:
+                            await running_clients[uid].stop()
+                        except: pass
+                        del running_clients[uid]
+                        
+            await asyncio.sleep(60)
+        except Exception as e:
+            print(f"Main Loop Error: {e}")
+            await asyncio.sleep(10)
+
+if __name__ == "__main__":
+    asyncio.run(main())
