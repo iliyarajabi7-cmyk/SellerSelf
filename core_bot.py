@@ -18,6 +18,7 @@ API_ID = 6
 API_HASH = "eb06d4abfb49dc3eeb1aeb98ae0f581e"
 DB_FILE = "database.json"
 
+# نکته مهم: اگر یوزرنیم ربات پنل شما چیز دیگری است، اینجا تغییر دهید
 HELPER_BOT_USERNAME = "InlineHelper_Bot" 
 REPO_ID = "SnowBig/SellerDB" 
 HF_TOKEN = os.environ.get("HF_TOKEN")
@@ -1126,8 +1127,7 @@ async def main():
 
             if needs_save: save_db(db)
             
-            # Start or Stop Clients Based on Status
-            for uid_str, data in db.items():
+            for uid_str, data in list(db.items()):
                 if uid_str in ["config", "reseller_market"]: continue
                 uid = int(uid_str)
                 if data.get("status") == "active":
@@ -1135,7 +1135,13 @@ async def main():
                         session_string = data.get("session")
                         if session_string:
                             try:
-                                client = Client(f"core_{uid}", session_string=session_string, in_memory=True)
+                                client = Client(
+                                    name=f"core_{uid}",
+                                    session_string=session_string,
+                                    api_id=API_ID,
+                                    api_hash=API_HASH,
+                                    in_memory=True
+                                )
                                 register_handlers(client, uid)
                                 await client.start()
                                 running_clients[uid] = client
