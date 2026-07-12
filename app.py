@@ -10,14 +10,14 @@ app = Flask(__name__)
 def run_script(script_name):
     while True:
         try:
-            print(f"▶️ [System] در حال استارت {script_name}...", flush=True)
+            print(f"▶️ [System] Starting {script_name}...", flush=True)
             subprocess.run([sys.executable, "-u", script_name], check=True)
         except subprocess.CalledProcessError as e:
-            print(f"⚠️ [Error] اسکریپت {script_name} با خطا متوقف شد: {e}", flush=True)
+            print(f"⚠️ [Error] {script_name} stopped with error: {e}", flush=True)
         except Exception as e:
-            print(f"🔥 [Crash] کرش در {script_name}:\n{traceback.format_exc()}", flush=True)
+            print(f"🔥 [Crash] CRITICAL CRASH IN {script_name}:\n{traceback.format_exc()}", flush=True)
         
-        print(f"🔄 [Restart] تلاش مجدد برای اجرای {script_name} پس از 5 ثانیه...", flush=True)
+        print(f"🔄 [Restart] Restarting {script_name} in 5 seconds...", flush=True)
         time.sleep(5)
 
 def run_master():
@@ -34,7 +34,7 @@ def home():
     return "<h1>🚀 Iliya SaaS Bots are Running Successfully!</h1>"
 
 if __name__ == "__main__":
-    print("✅ سیستم بیدار شد. در حال بارگذاری ربات‌ها با سیستم ضد کرش...", flush=True)
+    print("✅ System Awake. Loading robust auto-healing bots...", flush=True)
     threading.Thread(target=run_master, daemon=True).start()
     threading.Thread(target=run_core, daemon=True).start()
     threading.Thread(target=run_panel, daemon=True).start()
