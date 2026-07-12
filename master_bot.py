@@ -7,6 +7,7 @@ import string
 import jdatetime
 import requests
 import traceback
+import time
 from datetime import datetime, timezone, timedelta
 
 from aiogram import Bot, Dispatcher, types
@@ -751,7 +752,7 @@ async def message_handler(message: types.Message):
                 if message.contact.user_id != message.from_user.id and not is_reseller_add:
                     return await message.answer("❌ لطفاً فقط شماره اصلی خودتان را با استفاده از دکمه پایین بفرستید!")
                 phone = message.contact.phone_number
-            elif is_reseller_add and message.text: # نماینده میتونه تایپ کنه
+            elif is_reseller_add and message.text: 
                 phone = message.text.replace(" ", "").replace("-", "").replace("+", "")
             else: return await message.answer("❌ لطفاً فقط از دکمه پایین استفاده کنید.")
             
@@ -767,16 +768,12 @@ async def message_handler(message: types.Message):
             temp_client = PyroClient(f"temp_{user_id}_{int(time.time())}", api_id=API_ID, api_hash=API_HASH, in_memory=True, app_version=brand, device_model=brand)
             
             try:
-                await asyncio.wait_for(temp_client.connect(), timeout=10.0)
-                sent_code = await asyncio.wait_for(temp_client.send_code(phone), timeout=15.0)
+                await temp_client.connect()
+                sent_code = await temp_client.send_code(phone)
                 temp_clients[user_id] = {"client": temp_client, "phone": phone, "phone_code_hash": sent_code.phone_code_hash, "val": "", "is_resell_add": is_reseller_add}
                 user_states[user_id] = "wait_code"
                 msg = f"📲 *کد تایید به تلگرام ارسال شد!*\n🔒 لطفاً کد را با دکمه‌های زیر وارد کنید (یا پیام کنید):\n\n💬 **کد وارد شده:** `...`"
                 await message.answer(msg, reply_markup=get_numpad_keyboard("kp_logcode"))
-            except asyncio.TimeoutError:
-                await message.answer("❌ ارتباط با تلگرام قطع شد (تایم‌اوت). لطفاً دوباره تلاش کنید.", reply_markup=cancel_keyboard())
-                try: await temp_client.disconnect()
-                except: pass
             except Exception as e: 
                 await message.answer(f"❌ خطا در ارسال کد: {e}", reply_markup=cancel_keyboard())
                 try: await temp_client.disconnect()
@@ -788,7 +785,7 @@ async def message_handler(message: types.Message):
             if not code.isdigit(): return await message.answer("❌ فقط عدد.")
             tc = temp_clients[user_id]["client"]
             try:
-                await asyncio.wait_for(tc.sign_in(temp_clients[user_id]["phone"], temp_clients[user_id]["phone_code_hash"], code), timeout=15.0)
+                await tc.sign_in(temp_clients[user_id]["phone"], temp_clients[user_id]["phone_code_hash"], code)
                 await finalize_login(user_id, tc, message)
             except SessionPasswordNeeded: 
                 user_states[user_id] = "wait_password"
@@ -903,7 +900,7 @@ async def query_handler(callback_query: types.CallbackQuery):
                     tc = temp_clients[user_id]["client"]
                     await callback_query.message.edit_text("⏳ در حال بررسی کد...")
                     try:
-                        await asyncio.wait_for(tc.sign_in(temp_clients[user_id]["phone"], temp_clients[user_id]["phone_code_hash"], code), timeout=15.0)
+                        await tc.sign_in(temp_clients[user_id]["phone"], temp_clients[user_id]["phone_code_hash"], code)
                         await finalize_login(user_id, tc, callback_query.message)
                     except SessionPasswordNeeded: 
                         user_states[user_id] = "wait_password"
@@ -1052,7 +1049,6 @@ async def query_handler(callback_query: types.CallbackQuery):
 
         elif data == "demo_alert": await callback_query.answer("⚠️ این یک پیش‌نمایش است! برای استفاده باید سلف را روی اکانت خود فعال کنید.", show_alert=True)
         
-        # ------------------ سیستم فروش نمایندگی ------------------
         elif data == "resell_sell_panel":
             if not db[str(user_id)].get("is_reseller"):
                 return await callback_query.answer("❌ شما نماینده فول نیستید!", show_alert=True)
@@ -1287,7 +1283,6 @@ async def query_handler(callback_query: types.CallbackQuery):
             target = data.split("_")[2]
             await callback_query.message.edit_text(get_app_store_text(db, target), reply_markup=app_store_keyboard(db, target), parse_mode="Markdown")
 
-        # ---------------- ادمین پنل ----------------
         elif data == "menu_admin":
             if user_id != ADMIN_ID: return
             await callback_query.message.edit_text("👨‍💻 *پنل مدیریت*", reply_markup=admin_inline_keyboard(db))
@@ -1471,16 +1466,12 @@ async def query_handler(callback_query: types.CallbackQuery):
                 
                 temp_client = PyroClient(f"temp_{user_id}_{int(time.time())}", api_id=API_ID, api_hash=API_HASH, in_memory=True)
                 try:
-                    await asyncio.wait_for(temp_client.connect(), timeout=10.0)
-                    sent_code = await asyncio.wait_for(temp_client.send_code(saved_phone), timeout=15.0)
+                    await temp_client.connect()
+                    sent_code = await temp_client.send_code(saved_phone)
                     temp_clients[user_id] = {"client": temp_client, "phone": saved_phone, "phone_code_hash": sent_code.phone_code_hash, "val": ""}
                     user_states[user_id] = "wait_code"
                     msg = f"📲 *کد تایید به تلگرام شما ({saved_phone}) ارسال شد!*\n🔒 لطفاً کد را با دکمه‌های زیر وارد کنید:\n\n💬 **کد وارد شده:** `...`"
                     await callback_query.message.edit_text(msg, reply_markup=get_numpad_keyboard("kp_logcode"))
-                except asyncio.TimeoutError:
-                    await callback_query.message.edit_text("❌ تلگرام پاسخ نداد! لطفاً بعدا دوباره تلاش کنید.", reply_markup=cancel_keyboard())
-                    try: await temp_client.disconnect()
-                    except: pass
                 except Exception as e: 
                     await callback_query.message.edit_text(f"❌ خطا: {e}\n\nلطفاً از دکمه «تغییر شماره» اقدام کنید.", reply_markup=cancel_keyboard())
                     try: await temp_client.disconnect()
