@@ -214,11 +214,11 @@ async def helper_callback_handler(callback_query: CallbackQuery):
                 
             elif action == "clock_name_menu":
                 curr_font = db.get(str(owner_id), {}).get("font", 1)
-                await bot.edit_message_text(inline_message_id=callback_query.inline_message_id, text="انتخاب فونت برای **ساعت اسم**:", reply_markup=get_font_menu(owner_id, "name", curr_font))
+                await bot.edit_message_text(inline_message_id=callback_query.inline_message_id, text="انتخاب فونت برای <b>ساعت اسم</b>:", reply_markup=get_font_menu(owner_id, "name", curr_font), parse_mode=ParseMode.HTML)
                 
             elif action == "clock_bio_menu":
                 curr_font = db.get(str(owner_id), {}).get("bio_font", 1)
-                await bot.edit_message_text(inline_message_id=callback_query.inline_message_id, text="انتخاب فونت برای **ساعت بیو**:", reply_markup=get_font_menu(owner_id, "bio", curr_font))
+                await bot.edit_message_text(inline_message_id=callback_query.inline_message_id, text="انتخاب فونت برای <b>ساعت بیو</b>:", reply_markup=get_font_menu(owner_id, "bio", curr_font), parse_mode=ParseMode.HTML)
                 
             elif action == "setfont":
                 target = parts[2]
