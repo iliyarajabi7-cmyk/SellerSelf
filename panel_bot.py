@@ -35,6 +35,18 @@ def save_db(data):
         os.replace(tmp_file, DB_FILE)
     except: pass
 
+def get_expire_text(owner_id, db):
+    u = db.get(str(owner_id), {})
+    mah = u.get("mah_balance", 0)
+    prices = db.get("config", {}).get("module_prices", {})
+    if u.get("has_full_package", False): drain = prices.get("full_package", 50)
+    else: drain = sum(prices.get(m, 0) for m in u.get("active_modules", []))
+    if drain == 0: rem = "مصرف شما صفر است (نامحدود)"
+    else:
+        hours = mah / drain
+        rem = f"{int(hours // 24)} روز و {int(hours % 24)} ساعت"
+    return f"🔋 <b>وضعیت حساب سلف‌ربات شما:</b>\n\n💰 موجودی: <code>{mah:,}</code> میلی‌آمپر\n⚡️ مصرف فعلی: <code>{drain}</code> در ساعت\n⏱ زمان باقیمانده: <b>{rem}</b>"
+
 def get_entry_keyboard(owner_id):
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="ورود به داشبورد", callback_data=f"enter|{owner_id}", style="success"), 
@@ -54,7 +66,8 @@ def get_categories_keyboard(user_id):
         
         kb = []
         for idx, row in enumerate(layout):
-            row_style = "primary" if idx % 2 == 0 else "primary"
+            # ردیف اول (۰) آبی، ردیف دوم (۱) سبز و به همین ترتیب
+            row_style = "primary" if idx % 2 == 0 else "success"
             kb_row = []
             for btn_key in row:
                 base_name = names.get(btn_key, btn_key)
@@ -128,7 +141,7 @@ def get_downloader_menu(owner_id):
 def get_textmode_menu(owner_id, db):
     u = db.get(str(owner_id), {})
     current = u.get("text_mode")
-    modes = [("بولد", "بولد"), ("کج", "کج"), ("مونو", "مونو"), ("اسپویلر", "اسپویلر"), ("نقل‌قول", "نقل‌قول")]
+    modes = [("بولد", "بولد"), ("کج", "کج"), ("مونو", "مونو"), ("خط‌خورده", "خط‌خورده"), ("زیرخط", "زیرخط"), ("اسپویلر", "اسپویلر"), ("نقل‌قول", "نقل‌قول")]
     kb = []; row = []
     for m_id, m_name in modes:
         style = "success" if current == m_id else "primary"
@@ -142,7 +155,7 @@ def get_textmode_menu(owner_id, db):
 
 def get_guardian_menu(owner_id, db):
     u = db.get(str(owner_id), {})
-    g = u.get("guardian_config", {"pv": {"delete": False, "edit": False, "ttl": False}, "group": {"delete": False, "edit": False, "ttl": False}, "channel": {"delete": False, "edit": False, "ttl": False}})
+    g = u.get("guardian_config", {"pv": {"delete": False, "edit": False, "ttl": False}, "group": {"delete": False, "edit": False, "ttl": False}})
     
     def btn_s(val): return "success" if val else "danger"
     def btn_t(val, name): return f"🟢 {name}" if val else f"🔴 {name}"
@@ -152,17 +165,17 @@ def get_guardian_menu(owner_id, db):
          InlineKeyboardButton(text=btn_t(g["pv"]["edit"], "ویرایش پیوی"), callback_data=f"guard_tog|{owner_id}|pv|edit", style=btn_s(g["pv"]["edit"]))],
         [InlineKeyboardButton(text=btn_t(g["group"]["delete"], "حذف گروه"), callback_data=f"guard_tog|{owner_id}|group|delete", style=btn_s(g["group"]["delete"])),
          InlineKeyboardButton(text=btn_t(g["group"]["edit"], "ویرایش گروه"), callback_data=f"guard_tog|{owner_id}|group|edit", style=btn_s(g["group"]["edit"]))],
-        [InlineKeyboardButton(text=btn_t(g["channel"]["delete"], "حذف کانال"), callback_data=f"guard_tog|{owner_id}|channel|delete", style=btn_s(g["channel"]["delete"])),
-         InlineKeyboardButton(text=btn_t(g["channel"]["edit"], "ویرایش کانال"), callback_data=f"guard_tog|{owner_id}|channel|edit", style=btn_s(g["channel"]["edit"]))],
+        [InlineKeyboardButton(text=btn_t(g["pv"]["ttl"], "زماندار پیوی"), callback_data=f"guard_tog|{owner_id}|pv|ttl", style=btn_s(g["pv"]["ttl"])),
+         InlineKeyboardButton(text=btn_t(g["group"]["ttl"], "زماندار گروه"), callback_data=f"guard_tog|{owner_id}|group|ttl", style=btn_s(g["group"]["ttl"]))],
         [InlineKeyboardButton(text="📋 لیست گروه‌های افزوده‌شده", callback_data=f"guard_list|{owner_id}", style="primary")],
         [InlineKeyboardButton(text="بازگشت", callback_data=f"enter|{owner_id}", style="danger")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
 PANEL_TEXTS = {
-    "p_guard": "🛡 <b>نگهبان چت هوشمند</b>\n\nاز طریق دکمه‌های زیر می‌توانید نگهبان را کنترل کنید.\n⚠️ <i>علاوه بر دکمه‌ها، دستورات زیر نیز در دسترس هستند:</i>\n🔸 <code>.نگهبان پیوی حذف روشن</code>\n🔸 <code>.نگهبان گروه ویرایش روشن</code>\n🔸 <code>.نگهبان کانال زماندار روشن</code>\n🎯 <code>.نگهبان گروه افزودن</code> (جهت افزودن گروه فعلی به لیست نگهبان)\n📋 <code>.نگهبان لیست</code>",
+    "p_guard": "🛡 <b>نگهبان چت هوشمند</b>\n\nاز طریق دکمه‌های زیر می‌توانید نگهبان پیوی و گروه را کنترل کنید (کانال پشتیبانی نمی‌شود).\n⚠️ <i>دستورات:</i>\n🔸 <code>.نگهبان پیوی حذف روشن</code>\n🔸 <code>.نگهبان گروه ویرایش روشن</code>\n🔸 <code>.نگهبان پیوی زماندار روشن</code>\n🎯 <code>.نگهبان گروه افزودن</code>\n📋 <code>.نگهبان لیست</code>",
     "p_clock": "⏰ <b>ساعت زنده (اسم و بیو)</b>\n\nاین قابلیت ساعت دقیق ایران را با فونت‌های جذاب (و رنگ سبز به معنای فعال بودن) روی پروفایل شما قرار می‌دهد:",
-    "p_textmode": "✨ <b>حالت‌دهنده متن چت</b>\n\nاز طریق دکمه‌ها حالت را روشن کنید. متن‌های شما به صورت خودکار تغییر ظاهر می‌دهند.\n⚠️ <i>علاوه بر دکمه‌ها، دستورات زیر نیز فعالند:</i>\n🎨 <code>.حالت بولد</code>\n🎨 <code>.حالت کج</code>\n🎨 <code>.حالت اسپویلر</code>\n🎨 <code>.حالت نقل‌قول</code>\n🔗 <code>.حالت لینکدار [لینک]</code>",
+    "p_textmode": "✨ <b>حالت‌دهنده متن چت</b>\n\nاز طریق دکمه‌ها حالت را روشن کنید.\n⚠️ <i>دستورات:</i>\n🎨 <code>.حالت بولد</code>\n🎨 <code>.حالت کج</code>\n🎨 <code>.حالت مونو</code>\n🎨 <code>.حالت خط‌خورده</code>\n🎨 <code>.حالت زیرخط</code>\n🎨 <code>.حالت اسپویلر</code>\n🎨 <code>.حالت نقل‌قول</code>\n🔗 <code>.حالت لینکدار [لینک]</code>",
     "p_action": "🎭 <b>اکشن‌ساز فیک</b>\n\n🔸 <code>.اکشن پیوی تایپ</code>\n🔸 <code>.اکشن پیوی ویس</code>\n🔸 <code>.اکشن گروه عکس</code>\n🔸 <code>.اکشن گروه ویدیو</code>\n❌ <code>.اکشن پیوی خاموش</code>",
     "p_locks": "🔐 <b>قفل‌های امنیتی</b>\n\n🔸 <code>.قفل پیوی روشن</code>\n🔸 <code>.قفل لینک روشن</code>\n🔸 <code>.قفل عکس روشن</code>\n🔸 <code>.قفل فوروارد روشن</code>",
     "p_logo": "🎨 <b>لوگوی اختصاصی</b>\n\n🔸 <code>.لوگو [متن]</code>",
@@ -291,7 +304,7 @@ async def helper_callback_handler(callback_query: CallbackQuery):
                 cat = parts[2]
                 typ = parts[3]
                 if str(owner_id) not in db: db[str(owner_id)] = {}
-                g = db[str(owner_id)].get("guardian_config", {"pv": {"delete": False, "edit": False, "ttl": False}, "group": {"delete": False, "edit": False, "ttl": False}, "channel": {"delete": False, "edit": False, "ttl": False}})
+                g = db[str(owner_id)].get("guardian_config", {"pv": {"delete": False, "edit": False, "ttl": False}, "group": {"delete": False, "edit": False, "ttl": False}})
                 g[cat][typ] = not g[cat][typ]
                 db[str(owner_id)]["guardian_config"] = g
                 save_db(db)
@@ -312,6 +325,26 @@ async def helper_callback_handler(callback_query: CallbackQuery):
                 db[str(owner_id)]["text_mode"] = m_id if m_id != "خاموش" else None
                 save_db(db)
                 await bot.edit_message_text(inline_message_id=callback_query.inline_message_id, text=PANEL_TEXTS["p_textmode"], reply_markup=get_textmode_menu(owner_id, db), parse_mode=ParseMode.HTML)
+
+            # --- بخش‌های جدید ---
+            elif action == "p_expire":
+                await bot.edit_message_text(inline_message_id=callback_query.inline_message_id, text=get_expire_text(owner_id, db), reply_markup=get_back_button(owner_id), parse_mode=ParseMode.HTML)
+
+            elif action == "p_welcome":
+                w = db.get(str(owner_id), {}).get("welcome_status", False)
+                kb = [[InlineKeyboardButton(text="🟢 روشن" if w else "🔴 خاموش", callback_data=f"welcome_tog|{owner_id}", style="success" if w else "danger")],
+                      [InlineKeyboardButton(text="بازگشت", callback_data=f"enter|{owner_id}", style="danger")]]
+                await bot.edit_message_text(inline_message_id=callback_query.inline_message_id, text="👋 <b>خوشامدگویی گروه</b>\n\nمتن و مدیای خوشامد فقط از طریق دستور قابل تنظیمه:\n🔸 <code>.خوشامد متن [متن]</code>\n🔸 <code>.خوشامد مدیا</code> (ریپلای)", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb), parse_mode=ParseMode.HTML)
+
+            elif action == "welcome_tog":
+                if str(owner_id) not in db: db[str(owner_id)] = {}
+                db[str(owner_id)]["welcome_status"] = not db[str(owner_id)].get("welcome_status", False)
+                save_db(db)
+                w = db[str(owner_id)]["welcome_status"]
+                kb = [[InlineKeyboardButton(text="🟢 روشن" if w else "🔴 خاموش", callback_data=f"welcome_tog|{owner_id}", style="success" if w else "danger")],
+                      [InlineKeyboardButton(text="بازگشت", callback_data=f"enter|{owner_id}", style="danger")]]
+                await bot.edit_message_text(inline_message_id=callback_query.inline_message_id, text="👋 <b>خوشامدگویی گروه</b>\n\nمتن و مدیای خوشامد فقط از طریق دستور قابل تنظیمه:\n🔸 <code>.خوشامد متن [متن]</code>\n🔸 <code>.خوشامد مدیا</code> (ریپلای)", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb), parse_mode=ParseMode.HTML)
+            # ---------------------
 
             elif action in PANEL_TEXTS: 
                 if action not in ["p_ping", "p_info"] and not db.get(str(owner_id), {}).get("has_full_package", False) and action not in db.get(str(owner_id), {}).get("active_modules", []):
