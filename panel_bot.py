@@ -37,9 +37,9 @@ def save_db(data):
 
 def get_entry_keyboard(owner_id):
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="ورود به داشبورد", callback_data=f"enter|{owner_id}"), 
-         InlineKeyboardButton(text="بستن پنل", callback_data=f"close|{owner_id}")],
-        [InlineKeyboardButton(text="پشتیبانی", url="https://t.me/Im_Iliiya")]
+        [InlineKeyboardButton(text="ورود به داشبورد", callback_data=f"enter|{owner_id}", style="success"), 
+         InlineKeyboardButton(text="بستن پنل", callback_data=f"close|{owner_id}", style="danger")],
+        [InlineKeyboardButton(text="پشتیبانی", url="https://t.me/Im_Iliiya", style="primary")]
     ])
 
 def get_categories_keyboard(user_id):
@@ -53,7 +53,8 @@ def get_categories_keyboard(user_id):
         free_modules = ["p_ping", "p_info"] 
         
         kb = []
-        for row in layout:
+        for idx, row in enumerate(layout):
+            row_style = "primary" if idx % 2 == 0 else "success"
             kb_row = []
             for btn_key in row:
                 base_name = names.get(btn_key, btn_key)
@@ -61,33 +62,34 @@ def get_categories_keyboard(user_id):
                 if btn_key not in free_modules and not has_full_package and btn_key not in active_modules: 
                     is_locked = True
                 
-                # طراحی مینیمال و شیک جایگزین ایموجی
                 btn_name = f"🔒 {base_name}" if is_locked else f"『 {base_name} 』"
-                kb_row.append(InlineKeyboardButton(text=btn_name, callback_data=f"{btn_key}|{user_id}"))
+                kb_row.append(InlineKeyboardButton(text=btn_name, callback_data=f"{btn_key}|{user_id}", style=row_style))
             kb.append(kb_row)
             
-        kb.append([InlineKeyboardButton(text="ماشین حساب", callback_data=f"calc_main|{user_id}")])
-        kb.append([InlineKeyboardButton(text="بازگشت", callback_data=f"back|{user_id}")])
+        kb.append([InlineKeyboardButton(text="ماشین حساب", callback_data=f"calc_main|{user_id}", style="danger")])
+        kb.append([InlineKeyboardButton(text="بازگشت", callback_data=f"back|{user_id}", style="danger")])
         return InlineKeyboardMarkup(inline_keyboard=kb)
     except Exception as e: 
         print(f"Error in categories: {e}")
-        return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="خطا در خواندن اطلاعات", callback_data=f"close|{user_id}")]])
+        return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="خطا در خواندن اطلاعات", callback_data=f"close|{user_id}", style="danger")]])
 
 def get_back_button(owner_id):
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="بازگشت", callback_data=f"enter|{owner_id}")]
+        [InlineKeyboardButton(text="بازگشت", callback_data=f"enter|{owner_id}", style="danger")]
     ])
 
 def get_clock_menu(owner_id, db):
     u = db.get(str(owner_id), {})
-    name_status = "فعال" if u.get("clock_status") else "غیرفعال"
-    bio_status = "فعال" if u.get("bio_clock_status") else "غیرفعال"
+    name_active = bool(u.get("clock_status"))
+    bio_active = bool(u.get("bio_clock_status"))
+    name_status = "فعال" if name_active else "غیرفعال"
+    bio_status = "فعال" if bio_active else "غیرفعال"
     
     kb = [
-        [InlineKeyboardButton(text=f"ساعت اسم: {name_status}", callback_data=f"clock_name_menu|{owner_id}"),
-         InlineKeyboardButton(text=f"ساعت بیو: {bio_status}", callback_data=f"clock_bio_menu|{owner_id}")],
-        [InlineKeyboardButton(text="خاموش کردن هردو", callback_data=f"clock_turn_off|{owner_id}")],
-        [InlineKeyboardButton(text="بازگشت", callback_data=f"enter|{owner_id}")]
+        [InlineKeyboardButton(text=f"ساعت اسم: {name_status}", callback_data=f"clock_name_menu|{owner_id}", style="success" if name_active else "danger"),
+         InlineKeyboardButton(text=f"ساعت بیو: {bio_status}", callback_data=f"clock_bio_menu|{owner_id}", style="success" if bio_active else "danger")],
+        [InlineKeyboardButton(text="خاموش کردن هردو", callback_data=f"clock_turn_off|{owner_id}", style="danger")],
+        [InlineKeyboardButton(text="بازگشت", callback_data=f"enter|{owner_id}", style="danger")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
@@ -99,10 +101,10 @@ def get_font_menu(owner_id, target_type, current_font):
     kb = []; row = []
     for f_id, f_samp in fonts.items():
         btn_text = f"『 {f_samp} 』" if current_font == f_id else f_samp
-        row.append(InlineKeyboardButton(text=btn_text, callback_data=f"setfont|{owner_id}|{target_type}|{f_id}"))
+        row.append(InlineKeyboardButton(text=btn_text, callback_data=f"setfont|{owner_id}|{target_type}|{f_id}", style="primary"))
         if len(row) == 2:
             kb.append(row); row = []
-    kb.append([InlineKeyboardButton(text="بازگشت", callback_data=f"p_clock|{owner_id}")])
+    kb.append([InlineKeyboardButton(text="بازگشت", callback_data=f"p_clock|{owner_id}", style="danger")])
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
 def get_calculator_keyboard(owner_id):
@@ -118,7 +120,7 @@ def get_calculator_keyboard(owner_id):
         for k in row:
             r_btns.append(InlineKeyboardButton(text=k, callback_data=f"calc_act|{owner_id}|{k}"))
         kb.append(r_btns)
-    kb.append([InlineKeyboardButton(text="بازگشت", callback_data=f"enter|{owner_id}")])
+    kb.append([InlineKeyboardButton(text="بازگشت", callback_data=f"enter|{owner_id}", style="danger")])
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
 PANEL_TEXTS = {
