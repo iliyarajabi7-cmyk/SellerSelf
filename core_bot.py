@@ -7,6 +7,7 @@ import traceback
 import urllib.parse
 import re
 import requests
+import random
 from datetime import datetime, timezone, timedelta
 from pyrogram import Client, filters, raw, enums
 from pyrogram.errors import FloodWait, UserNotParticipant, AuthKeyUnregistered, SessionExpired
@@ -18,7 +19,6 @@ API_ID = 6
 API_HASH = "eb06d4abfb49dc3eeb1aeb98ae0f581e"
 DB_FILE = "database.json"
 
-# نکته مهم: اگر یوزرنیم ربات پنل شما چیز دیگری است، اینجا تغییر دهید
 HELPER_BOT_USERNAME = "InlineHelper_Bot" 
 REPO_ID = "SnowBig/SellerDB" 
 HF_TOKEN = os.environ.get("HF_TOKEN")
@@ -39,6 +39,7 @@ FONTS[9] = "0123456789".translate(str.maketrans("0123456789", "𝟬𝟭𝟮𝟯�
 FONTS[10] = "0123456789".translate(str.maketrans("0123456789", "𝟶𝟷𝟸𝟹𝟺𝟻𝟼𝟽𝟾𝟿"))
 
 ACTION_MAP = {"تایپ": enums.ChatAction.TYPING, "ویس": enums.ChatAction.RECORD_AUDIO, "عکس": enums.ChatAction.UPLOAD_PHOTO, "ویدیو": enums.ChatAction.UPLOAD_VIDEO, "گرد": enums.ChatAction.RECORD_VIDEO_NOTE, "سند": enums.ChatAction.UPLOAD_DOCUMENT, "بازی": enums.ChatAction.PLAYING, "استیکر": enums.ChatAction.CHOOSE_STICKER}
+DEVICE_MODELS = ["Samsung Galaxy S23", "iPhone 14 Pro Max", "Xiaomi 13 Pro", "Google Pixel 7", "OnePlus 11"]
 
 def get_iran_time(): return datetime.now(IRAN_TZ)
 
@@ -105,28 +106,45 @@ async def background_tasks(app, uid):
             b_font = db_u.get("bio_font", 1)
             
             if clock_status and has_perm(uid, "p_clock"):
+                if not settings.get("clock_base_captured"):
+                    try:
+                        me = await app.get_me()
+                        settings["base_first_name"] = (me.first_name or "User").split(" | ")[0].strip()
+                        settings["base_last_name"] = (me.last_name or "").split(" | ")[0].strip()
+                        settings["clock_base_captured"] = True
+                    except: pass
                 if time_str != last_clock_time:
                     ft = format_time(time_str, c_font)
                     base_first = settings.get("base_first_name", "User")
                     base_last = settings.get("base_last_name", "")
                     try:
                         if base_last:
-                            new_last = f"{base_last} | {ft}"
-                            await app.update_profile(first_name=base_first, last_name=new_last)
+                            await app.update_profile(first_name=base_first, last_name=f"{base_last} | {ft}")
                         else:
-                            new_first = f"{base_first} | {ft}"
-                            await app.update_profile(first_name=new_first, last_name="")
+                            await app.update_profile(first_name=f"{base_first} | {ft}", last_name="")
                         last_clock_time = time_str
                     except FloodWait as e: await asyncio.sleep(e.value + 2)
                     except: pass
+            else:
+                settings["clock_base_captured"] = False
 
             if bio_clock_status and has_perm(uid, "p_clock"):
+                if not settings.get("bio_base_captured"):
+                    try:
+                        full = await app.invoke(raw.functions.users.GetFullUser(id=await app.resolve_peer("me")))
+                        settings["base_bio"] = (full.full_user.about or "").rsplit(" | ", 1)[0]
+                    except: pass
+                    settings["bio_base_captured"] = True
                 if time_str != last_bio_time:
                     ft = format_time(time_str, b_font)
                     bio = settings.get("base_bio", "")
                     try: await app.update_profile(bio=(f"{bio} | {ft}" if bio else ft)[:70]); last_bio_time = time_str
                     except FloodWait as e: await asyncio.sleep(e.value + 2)
                     except: pass
+            else:
+                settings["bio_base_captured"] = False
+
+            USER_SETTINGS[uid] = settings
 
             if settings.get("tabchi_status") and settings.get("tabchi_text") and has_perm(uid, "p_tabchi"):
                 last_t = settings.get("last_tabchi", 0)
@@ -150,11 +168,12 @@ async def background_tasks(app, uid):
 
 def register_handlers(app, uid):
     if uid not in USER_SETTINGS:
+        db_settings = load_db().get(str(uid), {})
         USER_SETTINGS[uid] = {
             "base_first_name": "", "base_last_name": "", "base_bio": "",
             "tabchi_status": False, "tabchi_text": "", "tabchi_targets": set(), "tabchi_interval": 30, "last_tabchi": 0,
             "auto_clear_chats": {}, "anti_spam_groups": set(), "spam_tracker": {},
-            "guardian": {
+            "guardian": db_settings.get("guardian_config") or {
                 "pv": {"delete": False, "edit": False, "ttl": False},
                 "group": {"delete": False, "edit": False, "ttl": False},
                 "channel": {"delete": False, "edit": False, "ttl": False}
@@ -162,7 +181,7 @@ def register_handlers(app, uid):
             "guardian_targets": set(), "message_cache": {},
             "locks": {"pv": False, "groups": {}}, "filters": {}, "force_join": {}, "auto_reply": {}, "auto_react": {},
             "monshi_status": False, "monshi_text": "سلام! در اسرع وقت پاسخ می‌دهم. 🌹", "monshi_delay": 60, "monshi_cache": {},
-            "text_mode": None, "text_link": "", "action_pv": None, "action_group": None, "muted_users": {},
+            "text_mode": db_settings.get("text_mode"), "text_link": "", "action_pv": None, "action_group": None, "muted_users": {},
             "first_comment_channels": set(), "first_comment_text": "اول! 🚀", "welcome_status": False, "welcome_text": "🌹 کاربر عزیز {name}، به گروه خوش آمدید!", "welcome_media": None
         }
 
@@ -476,6 +495,11 @@ def register_handlers(app, uid):
             if action_type == "حذف": s["guardian"]["channel"]["delete"] = state_bool
             elif action_type == "ویرایش": s["guardian"]["channel"]["edit"] = state_bool
             elif action_type == "زماندار": s["guardian"]["channel"]["ttl"] = state_bool
+
+        db = load_db()
+        if str(uid) not in db: db[str(uid)] = {}
+        db[str(uid)]["guardian_config"] = s["guardian"]
+        save_db(db)
             
         await safe_edit(message, f"✅ نگهبان `{target}` برای `{action_type}` به حالت **{parts[3]}** تغییر یافت.")
 
@@ -511,23 +535,27 @@ def register_handlers(app, uid):
     @app.on_message(filters.me & filters.command("دانلود", prefixes="."))
     async def dl_cmd(client, message):
         if not has_perm(uid, "p_dl"): return await locked_msg(message)
-        if len(message.command) < 2: return await safe_edit(message, "📥 **دانلودر مدیا قدرتمند**\n\n🔸 `.دانلود [لینک]`")
+        if len(message.command) < 2: return await safe_edit(message, "📥 **دانلودر مدیا قدرتمند**\n\n🔸 `.دانلود [لینک]` (فقط اینستاگرام، تیک‌تاک و یوتیوب)")
         link = message.command[1]
         
         if not any(x in link for x in ["tiktok", "instagram", "youtube", "youtu.be"]):
             return await safe_edit(message, "❌ این لینک معتبر نیست. لطفاً یکی از لینک‌های اینستاگرام، تیک‌تاک یا یوتیوب را بفرستید.")
             
-        await safe_edit(message, "⏳ پردازش فایل از سرور ابری...")
+        await safe_edit(message, "⏳ در حال دانلود از سرور ابری... لطفاً صبر کنید.")
         try:
             bot_id = "HK_tictok_BOT"
+            try:
+                await app.invoke(raw.functions.account.UpdateNotifySettings(peer=await app.resolve_peer(bot_id), settings=raw.types.InputPeerNotifySettings(mute_until=2147483647)))
+            except: pass
+            
             sent_msg = await app.send_message(bot_id, link)
             downloaded = False
             for _ in range(30):
                 await asyncio.sleep(2)
-                async for bot_msg in app.get_chat_history(bot_id, limit=3):
+                async for bot_msg in app.get_chat_history(bot_id, limit=4):
                     if bot_msg.id > sent_msg.id:
                         if bot_msg.media:
-                            await safe_edit(message, "⬇️ دانلود مدیا انجام شد. در حال آپلود...")
+                            await safe_edit(message, "⬇️ دانلود کامل شد. در حال آپلود در همین چت...")
                             dl_path = await bot_msg.download()
                             
                             platform = "TikTok" if "tiktok" in link else "Instagram" if "instagram" in link else "YouTube"
@@ -539,7 +567,9 @@ def register_handlers(app, uid):
                             elif bot_msg.audio: await app.send_audio(message.chat.id, dl_path, caption=cap)
                             
                             os.remove(dl_path); await message.delete()
-                            try: await app.delete_history(bot_id)
+                            
+                            try:
+                                async for bm in app.get_chat_history(bot_id, limit=2): await bm.delete()
                             except: pass
                             downloaded = True; break
                         elif bot_msg.text and "error" in bot_msg.text.lower():
@@ -695,18 +725,23 @@ def register_handlers(app, uid):
         query = " ".join(parts[1:])
         await safe_edit(message, "🔍 جستجو و دانلود آهنگ از سرور ابری...")
         try:
-            bot_id = "vkmusic_bot"
+            bot_id = "melobot" 
+            try:
+                await app.invoke(raw.functions.account.UpdateNotifySettings(peer=await app.resolve_peer(bot_id), settings=raw.types.InputPeerNotifySettings(mute_until=2147483647)))
+            except: pass
+            
             sent_msg = await app.send_message(bot_id, query)
             downloaded = False
             for _ in range(15):
                 await asyncio.sleep(2)
-                async for bot_msg in app.get_chat_history(bot_id, limit=3):
+                async for bot_msg in app.get_chat_history(bot_id, limit=5):
                     if bot_msg.id > sent_msg.id and bot_msg.audio:
                         dl_path = await bot_msg.download()
-                        await app.send_audio(message.chat.id, dl_path)
+                        await app.send_audio(message.chat.id, dl_path, caption=f"🎵 {query}")
                         os.remove(dl_path)
                         await message.delete()
-                        try: await app.delete_history(bot_id)
+                        try:
+                            async for bm in app.get_chat_history(bot_id, limit=3): await bm.delete()
                         except: pass
                         downloaded = True; break
                 if downloaded: break
@@ -857,11 +892,26 @@ def register_handlers(app, uid):
         parts, s = message.command, USER_SETTINGS[uid]
         if len(parts) < 2: return await safe_edit(message, "✨ **حالت متن**\n\n🎨 `.حالت بولد`\n🎨 `.حالت کج`\n🎨 `.حالت مونو`\n🎨 `.حالت اسپویلر`\n🎨 `.حالت نقل‌قول`\n🔗 `.حالت لینکدار [لینک]`\n❌ `.حالت خاموش`")
         m = parts[1]
-        if m in ["بولد", "کج", "مونو", "خط‌خورده", "زیرخط", "نقل‌قول", "اسپویلر"]: s["text_mode"] = m; await safe_edit(message, f"✅ حالت {m} تنظیم شد.")
+        
+        db = load_db()
+        if str(uid) not in db: db[str(uid)] = {}
+        
+        if m in ["بولد", "کج", "مونو", "خط‌خورده", "زیرخط", "نقل‌قول", "اسپویلر"]: 
+            s["text_mode"] = m
+            db[str(uid)]["text_mode"] = m
+            save_db(db)
+            await safe_edit(message, f"✅ حالت {m} تنظیم شد.")
         elif m == "لینکدار":
             if len(parts) < 3: return await safe_edit(message, "❌ لینک را وارد کنید.")
-            s["text_mode"] = "link"; s["text_link"] = parts[2]; await safe_edit(message, f"✅ حالت لینکدار تنظیم شد.")
-        elif m == "خاموش": s["text_mode"] = None; await safe_edit(message, "❌ استایل متن خاموش شد.")
+            s["text_mode"] = "link"; s["text_link"] = parts[2]
+            db[str(uid)]["text_mode"] = "link"
+            save_db(db)
+            await safe_edit(message, f"✅ حالت لینکدار تنظیم شد.")
+        elif m == "خاموش": 
+            s["text_mode"] = None
+            db[str(uid)]["text_mode"] = None
+            save_db(db)
+            await safe_edit(message, "❌ استایل متن خاموش شد.")
 
     @app.on_message(filters.me & filters.command("کامنت", prefixes="."))
     async def first_comment_cmd(client, message):
@@ -985,6 +1035,7 @@ def register_handlers(app, uid):
     @app.on_message(~filters.me, group=4)
     async def guardian_cacher_and_ttl(client, message):
         if not has_perm(uid, "p_guard"): return
+        if message.from_user and message.from_user.is_bot: return
         s = USER_SETTINGS[uid]
         if "guardian" not in s: return
         s["message_cache"][message.id] = message
@@ -1006,10 +1057,13 @@ def register_handlers(app, uid):
         s = USER_SETTINGS[uid]
         if "guardian" not in s: return
         if s["guardian_targets"] and message.chat.id not in s["guardian_targets"]: return
-        old = s["message_cache"].get(message.id)
         
         chat_type = message.chat.type
         is_pv = chat_type == enums.ChatType.PRIVATE
+        
+        if is_pv and message.from_user and message.from_user.is_bot: return
+        
+        old = s["message_cache"].get(message.id)
         is_group = chat_type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]
         is_channel = chat_type == enums.ChatType.CHANNEL
         
@@ -1033,6 +1087,9 @@ def register_handlers(app, uid):
                 
                 chat_type = c.chat.type
                 is_pv = chat_type == enums.ChatType.PRIVATE
+                
+                if is_pv and c.from_user and c.from_user.is_bot: continue
+                
                 is_group = chat_type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]
                 is_channel = chat_type == enums.ChatType.CHANNEL
                 
@@ -1069,8 +1126,8 @@ def register_handlers(app, uid):
             elif m == "مونو": fmt = f"<code>{txt}</code>"; parse_mode = enums.ParseMode.HTML
             elif m == "خط‌خورده": fmt = f"<s>{txt}</s>"; parse_mode = enums.ParseMode.HTML
             elif m == "زیرخط": fmt = f"<u>{txt}</u>"; parse_mode = enums.ParseMode.HTML
-            elif m == "نقل‌قول": fmt = f"<blockquote expandable>{txt}</blockquote>"; parse_mode = enums.ParseMode.HTML
-            elif m == "اسپویلر": fmt = f"<tg-spoiler>{txt}</tg-spoiler>"; parse_mode = enums.ParseMode.HTML
+            elif m == "نقل‌قول": fmt = f"<blockquote>{txt}</blockquote>"; parse_mode = enums.ParseMode.HTML
+            elif m == "اسپویلر": fmt = f"<spoiler>{txt}</spoiler>"; parse_mode = enums.ParseMode.HTML
             elif m == "link": fmt = f"<a href='{USER_SETTINGS[uid].get('text_link', '')}'>{txt}</a>"; parse_mode = enums.ParseMode.HTML
             else: fmt = txt; parse_mode = enums.ParseMode.DEFAULT
             try: await message.edit_text(fmt, disable_web_page_preview=True, parse_mode=parse_mode)
@@ -1140,6 +1197,8 @@ async def main():
                                     session_string=session_string,
                                     api_id=API_ID,
                                     api_hash=API_HASH,
+                                    app_version="NitroSelf",
+                                    device_model=random.choice(DEVICE_MODELS),
                                     in_memory=True
                                 )
                                 register_handlers(client, uid)
