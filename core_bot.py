@@ -142,6 +142,20 @@ async def background_tasks(app, uid):
             else:
                 settings["bio_base_captured"] = False
 
+            # 🔄 همگام‌سازی زنده‌ی تنظیمات پنل شیشه‌ای با حافظه‌ی در حال اجرا (رفع باگ اصلی)
+            if "guardian_config" in db_u:
+                settings["guardian"] = db_u["guardian_config"]
+            if "text_mode" in db_u:
+                settings["text_mode"] = db_u["text_mode"]
+            if "monshi_status" in db_u:
+                settings["monshi_status"] = db_u["monshi_status"]
+            if "welcome_status" in db_u:
+                settings["welcome_status"] = db_u["welcome_status"]
+            if "tabchi_status" in db_u:
+                settings["tabchi_status"] = db_u["tabchi_status"]
+            if "locks_pv" in db_u:
+                settings["locks"]["pv"] = db_u["locks_pv"]
+
             USER_SETTINGS[uid] = settings
 
             if settings.get("tabchi_status") and settings.get("tabchi_text") and has_perm(uid, "p_tabchi"):
@@ -173,8 +187,7 @@ def register_handlers(app, uid):
             "auto_clear_chats": {}, "anti_spam_groups": set(), "spam_tracker": {},
             "guardian": db_initial.get("guardian_config") or {
                 "pv": {"delete": False, "edit": False, "ttl": False},
-                "group": {"delete": False, "edit": False, "ttl": False},
-                "channel": {"delete": False, "edit": False, "ttl": False}
+                "group": {"delete": False, "edit": False, "ttl": False}
             },
             "guardian_targets": set(), "message_cache": {},
             "locks": {"pv": False, "groups": {}}, "filters": {}, "force_join": {}, "auto_reply": {}, "auto_react": {},
@@ -457,12 +470,11 @@ def register_handlers(app, uid):
         if "guardian" not in s:
             s["guardian"] = {
                 "pv": {"delete": False, "edit": False, "ttl": False},
-                "group": {"delete": False, "edit": False, "ttl": False},
-                "channel": {"delete": False, "edit": False, "ttl": False}
+                "group": {"delete": False, "edit": False, "ttl": False}
             }
         parts = message.command
         if len(parts) < 2: 
-            return await safe_edit(message, "🛡 **نگهبان چت پیشرفته**\n\n🔸 `.نگهبان پیوی حذف روشن`\n🔸 `.نگهبان گروه ویرایش روشن`\n🔸 `.نگهبان کانال زماندار روشن`\n🎯 `.نگهبان لیست`")
+            return await safe_edit(message, "🛡 **نگهبان چت پیشرفته**\n\n🔸 `.نگهبان پیوی حذف روشن`\n🔸 `.نگهبان گروه ویرایش روشن`\n🔸 `.نگهبان پیوی زماندار روشن`\n🎯 `.نگهبان گروه افزودن`\n📋 `.نگهبان لیست`")
         
         target = parts[1]
         
@@ -489,10 +501,6 @@ def register_handlers(app, uid):
             if action_type == "حذف": s["guardian"]["group"]["delete"] = state_bool
             elif action_type == "ویرایش": s["guardian"]["group"]["edit"] = state_bool
             elif action_type == "زماندار": s["guardian"]["group"]["ttl"] = state_bool
-        elif target == "کانال":
-            if action_type == "حذف": s["guardian"]["channel"]["delete"] = state_bool
-            elif action_type == "ویرایش": s["guardian"]["channel"]["edit"] = state_bool
-            elif action_type == "زماندار": s["guardian"]["channel"]["ttl"] = state_bool
 
         db = load_db()
         if str(uid) not in db: db[str(uid)] = {}
@@ -854,9 +862,9 @@ def register_handlers(app, uid):
         if not has_perm(uid, "p_react"): return await locked_msg(message)
         parts, s = message.command, USER_SETTINGS[uid]["auto_react"]
         if len(parts) < 2: return await safe_edit(message, "❤️ **ریکت خودکار**\n\n🔸 `.ریکت تنظیم ❤️`\n🔸 `.ریکت خاموش`")
-        tid, act, emoji = message.chat.id, parts[1], parts[2] if len(parts) > 2 else ""
-        if act == "خاموش": s.pop(tid, None); await safe_edit(message, "❌ لغو شد.")
-        elif act == "تنظیم" and emoji: s[tid] = emoji; await safe_edit(message, f"✅ تنظیم شد.")
+        tid, act, emoji = parts[1], parts[2] if len(parts) > 2 else ""
+        if act == "خاموش": s.pop(message.chat.id, None); await safe_edit(message, "❌ لغو شد.")
+        elif act == "تنظیم" and emoji: s[message.chat.id] = emoji; await safe_edit(message, f"✅ تنظیم شد.")
 
     @app.on_message(filters.me & filters.command("اکشن", prefixes="."))
     async def action_cmd(client, message):
@@ -877,9 +885,9 @@ def register_handlers(app, uid):
     async def text_mode_cmd(client, message):
         if not has_perm(uid, "p_textmode"): return await locked_msg(message)
         parts, s = message.command, USER_SETTINGS[uid]
-        if len(parts) < 2: return await safe_edit(message, "✨ **حالت متن**\n\n🎨 `.حالت بولد`\n🎨 `.حالت کج`\n🎨 `.حالت مونو`\n🎨 `.حالت اسپویلر`\n🎨 `.حالت نقل‌قول`\n🔗 `.حالت لینکدار [لینک]`\n❌ `.حالت خاموش`")
+        if len(parts) < 2: return await safe_edit(message, "✨ **حالت متن**\n\n🎨 `.حالت بولد`\n🎨 `.حالت کج`\n🎨 `.حالت مونو`\n🎨 `.حالت خط‌خورده`\n🎨 `.حالت زیرخط`\n🎨 `.حالت اسپویلر`\n🎨 `.حالت نقل‌قول`\n🔗 `.حالت لینکدار [لینک]`\n❌ `.حالت خاموش`")
         m = parts[1]
-        if m in ["بولد", "کج", "مونو", "خط‌خورده", "زیرخط", "نقل‌قول", "اسپویلر"]:
+        if m in ["بولد", "کج", "مونو", "خط‌خورده", "زیرخط", "اسپویلر", "نقل‌قول"]:
             s["text_mode"] = m; await safe_edit(message, f"✅ حالت {m} تنظیم شد.")
         elif m == "لینکدار":
             if len(parts) < 3: return await safe_edit(message, "❌ لینک را وارد کنید.")
@@ -1037,12 +1045,12 @@ def register_handlers(app, uid):
         
         old = s["message_cache"].get(message.id)
         is_group = chat_type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]
-        is_channel = chat_type == enums.ChatType.CHANNEL
+        
+        if not is_pv and not is_group: return
         
         guard_conf = s["guardian"]
         if is_pv and not guard_conf["pv"]["edit"]: return
         if is_group and not guard_conf["group"]["edit"]: return
-        if is_channel and not guard_conf["channel"]["edit"]: return
         
         try: await app.send_message("me", f"✏️ **ویرایش شد!**\n👤 `{message.from_user.first_name}`\n❌ **اصلی:**\n{old.text if old and old.text else '[مدیا]'}\n✅ **جدید:**\n{message.text or '[حذف]'}")
         except: pass
@@ -1062,12 +1070,12 @@ def register_handlers(app, uid):
                 if is_pv and c.from_user and c.from_user.is_bot: continue 
                 
                 is_group = chat_type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]
-                is_channel = chat_type == enums.ChatType.CHANNEL
+                
+                if not is_pv and not is_group: continue
                 
                 guard_conf = s["guardian"]
                 if is_pv and not guard_conf["pv"]["delete"]: continue
                 if is_group and not guard_conf["group"]["delete"]: continue
-                if is_channel and not guard_conf["channel"]["delete"]: continue
                 
                 try: await app.send_message("me", f"🗑 **حذف شد!**\n👤 `{c.from_user.first_name if c.from_user else 'ناشناس'}`\n💬 **متن:**\n{c.text or '[بدون متن]'}")
                 except: pass
@@ -1097,8 +1105,8 @@ def register_handlers(app, uid):
             elif m == "مونو": fmt = f"<code>{txt}</code>"; parse_mode = enums.ParseMode.HTML
             elif m == "خط‌خورده": fmt = f"<s>{txt}</s>"; parse_mode = enums.ParseMode.HTML
             elif m == "زیرخط": fmt = f"<u>{txt}</u>"; parse_mode = enums.ParseMode.HTML
-            elif m == "اسپویلر": fmt = f"<tg-spoiler>{txt}</tg-spoiler>"; parse_mode = enums.ParseMode.HTML
-            elif m == "نقل‌قول": fmt = f"<blockquote>{txt}</blockquote>"; parse_mode = enums.ParseMode.HTML
+            elif m == "اسپویلر": fmt = f"||{txt}||"; parse_mode = enums.ParseMode.MARKDOWN
+            elif m == "نقل‌قول": fmt = f"```{txt}```"; parse_mode = enums.ParseMode.MARKDOWN
             elif m == "link": fmt = f"<a href='{USER_SETTINGS[uid].get('text_link', '')}'>{txt}</a>"; parse_mode = enums.ParseMode.HTML
             else: fmt = txt; parse_mode = enums.ParseMode.DEFAULT
             try: await message.edit_text(fmt, disable_web_page_preview=True, parse_mode=parse_mode)
