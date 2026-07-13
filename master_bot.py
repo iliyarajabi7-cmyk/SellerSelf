@@ -112,7 +112,8 @@ _db["config"]["panel_config"] = {
         ["p_ai", "p_qr", "p_profile"], 
         ["p_translate", "p_anim", "p_cheat"], 
         ["p_tts", "p_music", "p_tabchi"], 
-        ["p_comment", "p_crypto", "p_schedule", "p_screen"]
+        ["p_comment", "p_crypto", "p_schedule", "p_screen"],
+        ["p_welcome", "p_expire"]
     ],
     "names": {
         "p_textmode": "حالت متن", "p_clock": "ساعت", "p_guard": "نگهبان چت", 
@@ -126,7 +127,8 @@ _db["config"]["panel_config"] = {
         "p_music": "سرچ آهنگ", "p_tabchi": "تبچی", "p_comment": "کامنت اول", 
         "p_crypto": "قیمت ارز", "p_readall": "سین‌زن همگانی", 
         "p_v2ray": "پروکسی و V2ray", "p_qr": "کیوآر کد", "p_profile": "مدیریت پروفایل",
-        "p_schedule": "ارسال زمان‌دار", "p_screen": "اسکرین"
+        "p_schedule": "ارسال زمان‌دار", "p_screen": "اسکرین",
+        "p_welcome": "خوشامدگویی گروه", "p_expire": "وضعیت حساب من"
     }
 }
 save_db(_db)
