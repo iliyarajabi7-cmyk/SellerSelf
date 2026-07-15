@@ -82,16 +82,28 @@ def pick_panel(xui, gb):
 # ============================================================
 class XUIClient:
     def __init__(self, panel):
-        base = (panel.get("base_url") or "").rstrip("/")
+        origin = (panel.get("base_url") or "").rstrip("/")
         wbp = (panel.get("web_base_path") or "").strip("/")
-        if wbp:
-            base = f"{base}/{wbp}"
+        # اگر ادمین مسیر پایه را وارد نکرد، پیش‌فرض روی sub می‌گذاریم
+        if not wbp:
+            wbp = "sub"
+        base = f"{origin}/{wbp}"
         self.base = base
+        self.origin = origin
         self.username = panel.get("username") or ""
         self.password = panel.get("password") or ""
         self.inbound_id = int(panel.get("inbound_id") or 1)
         self.sub_url_base = (panel.get("sub_url_base") or "").rstrip("/")
         self.s = requests.Session()
+        # هدرهای مرورگرمانند تا پنل/رِیل‌وی درخواست را 403 نکند
+        self.s.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "X-Requested-With": "XMLHttpRequest",
+            "Origin": origin,
+            "Referer": f"{base}/",
+        })
 
     def _login(self):
         r = self.s.post(
@@ -127,7 +139,7 @@ class XUIClient:
             "limitIp": 0,
         }
         payload = {"id": self.inbound_id, "settings": json.dumps({"clients": [client]})}
-        r = self.s.post(f"{self.base}/panel/api/inbounds/addClient", json=payload, timeout=25)
+        r = self.s.post(f"{self.base}/panel/api/inbounds/addClient", data=payload, timeout=25)
         r.raise_for_status()
         try:
             ok = r.json().get("success", False)
@@ -477,7 +489,7 @@ async def _notify_admin(bot, ADMIN_ID, text):
 # ============================================================
 _PANEL_STEPS = [
     ("base_url", "🌐 آدرس پنل را بفرست (مثلاً https://mypanel.up.railway.app):", str),
-    ("web_base_path", "📁 مسیر پایهٔ پنل (web base path). اگر ندارد بنویس: -", str),
+    ("web_base_path", "📁 مسیر پایهٔ پنل (web base path). اگر نداری یا مطمئن نیستی بنویس: -  (پیش‌فرض روی sub تنظیم می‌شود)", str),
     ("username", "👤 یوزرنیم لاگین پنل:", str),
     ("password", "🔑 پسورد لاگین پنل:", str),
     ("inbound_id", "🔢 آیدی اینباند (inbound id) — معمولاً 1:", int),
