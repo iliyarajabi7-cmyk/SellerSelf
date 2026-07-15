@@ -21,7 +21,7 @@ try:
 except Exception:
     cffi_requests = None
     _HAS_CFFI = False
-print(f"[config_seller] curl_cffi available = {_HAS_CFFI}", flush=True)
+print(f"[config_seller] build=diag-v2 curl_cffi={_HAS_CFFI}", flush=True)
 from datetime import datetime, timezone, timedelta
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -131,20 +131,26 @@ class XUIClient:
 
     def _login(self):
         # گام ۱: گرفتن توکن CSRF (و کوکی سشن)
-        self._csrf()
+        token = self._csrf()
         # گام ۲: لاگین همراه توکن
         r = self.s.post(
             f"{self.base}/login",
             data={"username": self.username, "password": self.password},
             timeout=20,
         )
-        r.raise_for_status()
+        code = getattr(r, "status_code", None)
+        if code != 200:
+            body = (getattr(r, "text", "") or "")[:150]
+            raise RuntimeError(
+                f"login_http_{code} | csrf={'ok' if token else 'NONE'} | url={self.base}/login | resp={body}"
+            )
         try:
             ok = r.json().get("success", False)
         except Exception:
             ok = False
         if not ok:
-            raise RuntimeError("login_failed")
+            body = (getattr(r, "text", "") or "")[:150]
+            raise RuntimeError(f"login_failed | resp={body}")
         # بعد از لاگین سشن عوض می‌شود؛ توکن را برای درخواست‌های بعدی (addClient) تازه می‌کنیم
         self._csrf()
 
