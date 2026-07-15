@@ -143,7 +143,7 @@ class XUIClient:
 #  دکمهٔ ورودی منوی اصلی (تک‌دکمه)
 # ============================================================
 def config_home_row():
-    return [InlineKeyboardButton(text="🛒 خرید کانفیگ", callback_data="cfg_home", style=ButtonStyle.PRIMARY)]
+    return [InlineKeyboardButton(text="🛒 خرید کانفیگ", callback_data="cfg_home", style=ButtonStyle.SUCCESS)]
 
 
 def _home_keyboard():
@@ -162,16 +162,29 @@ def _home_text():
     )
 
 
-def _buy_keyboard():
+def _buy_keyboard(gb):
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="➖ حجم", callback_data="cfg_gb_dec", style=ButtonStyle.DANGER),
-            InlineKeyboardButton(text="📊 حجم", callback_data="cfg_ignore", style=ButtonStyle.PRIMARY),
-            InlineKeyboardButton(text="➕ حجم", callback_data="cfg_gb_inc", style=ButtonStyle.SUCCESS),
+            InlineKeyboardButton(text="➖", callback_data="cfg_gb_dec", style=ButtonStyle.DANGER),
+            InlineKeyboardButton(text=f"{gb} گیگ", callback_data="cfg_ignore", style=ButtonStyle.PRIMARY),
+            InlineKeyboardButton(text="➕", callback_data="cfg_gb_inc", style=ButtonStyle.SUCCESS),
         ],
         [InlineKeyboardButton(text="✅ تایید و خرید", callback_data="cfg_buy", style=ButtonStyle.PRIMARY)],
         [InlineKeyboardButton(text="🔙 بازگشت", callback_data="cfg_home", style=ButtonStyle.DANGER)],
     ])
+
+
+_DISABLED_TEXT = (
+    "🔧 بخش کانفیگ فعلاً غیرفعال است و به‌زودی فعال خواهد شد.\n\n"
+    "🙏 لطفاً کمی بعد دوباره تلاش کنید."
+)
+
+
+def _requester_tag(cq):
+    u = cq.from_user
+    uname = f"@{u.username}" if getattr(u, "username", None) else "—"
+    name = getattr(u, "full_name", "") or ""
+    return f"👤 درخواست‌دهنده: {name}\n🆔 آیدی عددی: `{u.id}`\n🔖 یوزرنیم: {uname}"
 
 
 # state موقت انتخاب حجم (در حافظه)
@@ -272,8 +285,8 @@ async def handle_cfg_callback(callback_query, bot, db, save_db, main_menu_keyboa
 
     # -------- منوی خرید --------
     if data == "cfg_buy_menu":
-        _get_gb(user_id, xui)
-        await _safe_edit(msg, _buy_text(db, user_id, xui), _buy_keyboard())
+        gb0 = _get_gb(user_id, xui)
+        await _safe_edit(msg, _buy_text(db, user_id, xui), _buy_keyboard(gb0))
         return await callback_query.answer()
 
     if data in ("cfg_gb_inc", "cfg_gb_dec"):
@@ -283,7 +296,7 @@ async def handle_cfg_callback(callback_query, bot, db, save_db, main_menu_keyboa
         else:
             gb = max(xui["min_gb"], gb - xui["gb_step"])
         _BUY_STATE[user_id] = gb
-        await _safe_edit(msg, _buy_text(db, user_id, xui), _buy_keyboard())
+        await _safe_edit(msg, _buy_text(db, user_id, xui), _buy_keyboard(gb))
         return await callback_query.answer()
 
     if data == "cfg_buy":
@@ -293,8 +306,9 @@ async def handle_cfg_callback(callback_query, bot, db, save_db, main_menu_keyboa
         bal = db[str(user_id)].get("mah_balance", 0)
         panel = pick_panel(xui, gb)
         if panel is None:
-            await _notify_admin(bot, ADMIN_ID, "⚠️ موجودی پنل تمام شد! یک پنل جدید اضافه کن.")
-            return await callback_query.answer("⚠️ فعلاً ظرفیت فروش پر است، بعداً تلاش کنید.", show_alert=True)
+            await _notify_admin(bot, ADMIN_ID, "⚠️ درخواست خرید کانفیگ ثبت شد ولی هیچ پنل فعالی موجود نیست!\n" + _requester_tag(callback_query))
+            await _safe_edit(msg, _DISABLED_TEXT, _back_home_kb())
+            return await callback_query.answer()
         if bal < price:
             return await callback_query.answer(f"❌ موجودی کافی نیست! نیاز: {price:,} - موجودی: {bal:,}", show_alert=True)
         await _safe_edit(msg, "⏳ در حال ساخت کانفیگ...", None)
@@ -317,8 +331,9 @@ async def handle_cfg_callback(callback_query, bot, db, save_db, main_menu_keyboa
         gb, days = xui["free_test_gb"], xui["free_test_days"]
         panel = pick_panel(xui, gb)
         if panel is None:
-            await _notify_admin(bot, ADMIN_ID, "⚠️ تست رایگان: موجودی پنل تمام شد!")
-            return await callback_query.answer("⚠️ فعلاً ظرفیت تست پر است.", show_alert=True)
+            await _notify_admin(bot, ADMIN_ID, "⚠️ درخواست تست رایگان ثبت شد ولی هیچ پنل فعالی موجود نیست!\n" + _requester_tag(callback_query))
+            await _safe_edit(msg, _DISABLED_TEXT, _back_home_kb())
+            return await callback_query.answer()
         await _safe_edit(msg, "⏳ در حال ساخت کانفیگ تست...", None)
         try:
             res = await _make_and_store(db, user_id, gb, days, xui, True, panel)

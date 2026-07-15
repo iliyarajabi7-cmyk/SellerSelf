@@ -267,8 +267,6 @@ def main_menu_keyboard(db, user_id):
          InlineKeyboardButton(text="👁‍🗨 پیش‌نمایش پنل", callback_data="menu_glass_panel", style=ButtonStyle.SUCCESS)]
     ]
     
-    kb.append(config_seller.config_home_row())
-
     if is_reseller:
         kb.append([InlineKeyboardButton(text=f"🏢 پنل نمایندگی {brand or 'بدون نام'}", callback_data="menu_reseller_panel", style=ButtonStyle.PRIMARY),
                    InlineKeyboardButton(text=f"🔗 شارژ رایگان (دعوت: {invites_count})", callback_data="menu_referral", style=ButtonStyle.PRIMARY)])
@@ -277,6 +275,7 @@ def main_menu_keyboard(db, user_id):
         req_res_text = "🤝 پنل نمایندگی تخفیف‌دار" if is_discount_reseller else "🤝 درخواست نمایندگی"
         kb.append([InlineKeyboardButton(text=req_res_text, callback_data="menu_req_reseller", style=req_res_style),
                    InlineKeyboardButton(text=f"🔗 شارژ رایگان (دعوت: {invites_count})", callback_data="menu_referral", style=ButtonStyle.PRIMARY)])
+    kb.append(config_seller.config_home_row())
         
     kb.append([InlineKeyboardButton(text="👨‍💻 ارتباط با پشتیبانی", url=f"https://t.me/{SUPPORT_ID.replace('@', '')}", style=ButtonStyle.DANGER),
                InlineKeyboardButton(text="📢 کانال رسمی", url=CHANNEL_ID, style=ButtonStyle.DANGER)])
@@ -730,7 +729,7 @@ async def message_handler(message: types.Message):
             text = f"🤝 **پیشنهاد خرید پنل نمایندگی!**\n\nفردی با آیدی `{user_id}` قصد فروش نمایندگی خود به شما را دارد.\n💰 **قیمت:** `{price:,}` تومان\n👥 انتقال مشتریان: {'بله' if trans_c else 'خیر'}\n\n💳 کارت: `{card}`\nبنام: {name}\n\nدر صورت تمایل مبلغ را واریز و روی دکمه ارسال رسید کلیک کنید."
             try:
                 await bot.send_message(int(target), text, reply_markup=kb)
-                await message.answer("✅ پیشنهاد شما با موفقیت برای خریدار ارسال شد. در صورت تایید و واریز، رسید برای شما ارسال خواهد شد.", reply_markup=main_menu_keyboard(db, user_id))
+                await message.answer("✅ پیشنهاد شما با موفقیت برای خریدار ارسال شد. در صورت تای��د و واریز، رسید برای شما ارسال خواهد شد.", reply_markup=main_menu_keyboard(db, user_id))
             except:
                 await message.answer("❌ کاربر ربات را استارت نکرده است.", reply_markup=cancel_keyboard())
             del user_states[user_id]; del temp_clients[user_id]
