@@ -21,6 +21,7 @@ try:
 except Exception:
     cffi_requests = None
     _HAS_CFFI = False
+print(f"[config_seller] curl_cffi available = {_HAS_CFFI}", flush=True)
 from datetime import datetime, timezone, timedelta
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
