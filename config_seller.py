@@ -21,7 +21,7 @@ try:
 except Exception:
     cffi_requests = None
     _HAS_CFFI = False
-print(f"[config_seller] build=diag-v3 curl_cffi={_HAS_CFFI}", flush=True)
+print(f"[config_seller] build=diag-v4 curl_cffi={_HAS_CFFI}", flush=True)
 from datetime import datetime, timezone, timedelta
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -101,6 +101,7 @@ class XUIClient:
         self.password = panel.get("password") or ""
         self.inbound_id = int(panel.get("inbound_id") or 1)
         self.sub_url_base = (panel.get("sub_url_base") or "").rstrip("/")
+        self.api_token = (panel.get("api_token") or "").strip()
         # curl_cffi با اثرانگشت TLS کروم، از سد بات‌دیتکشن کلادفلر/رِیل‌وی رد می‌شود
         if _HAS_CFFI:
             self.s = cffi_requests.Session(impersonate="chrome")
@@ -115,6 +116,9 @@ class XUIClient:
             "Origin": origin,
             "Referer": f"{base}/",
         })
+        # روش مطمئن: اگر توکن API داده شده، با هدر Authorization احراز هویت می‌کنیم (بدون نیاز به کوکی سشن)
+        if self.api_token:
+            self.s.headers.update({"Authorization": f"Bearer {self.api_token}"})
 
     def _csrf(self):
         # پنل‌های جدید 3x-ui برای POST /login توکن CSRF می‌خواهند；
@@ -151,14 +155,13 @@ class XUIClient:
         if not ok:
             body = (getattr(r, "text", "") or "")[:150]
             raise RuntimeError(f"login_failed | resp={body}")
-        # مهم: بعد از لاگین دیگر /csrf-token را صدا نمی‌زنیم؛
-        # آن کار کوکی سشنِ احراز‌شده را با یک سشن ناشناس عوض می‌کرد و addClient با ۴۰۴ رد می‌شد.
-        # توکن CSRFِ قبل از لاگین در همان کوکی سشن باقی می‌ماند و معتبر است.
 
     def create_config(self, email, gb, days):
-        if not self.base or not self.username:
+        if not self.base or (not self.username and not self.api_token):
             raise RuntimeError("panel_not_configured")
-        self._login()
+        # با توکن API نیازی به لاگین/کوکی سشن نیست؛ مستقیم با هدر Authorization کار می‌کنیم
+        if not self.api_token:
+            self._login()
         client_uuid = str(uuid.uuid4())
         sub_id = uuid.uuid4().hex[:16]
         total_bytes = int(gb) * 1024 * 1024 * 1024
@@ -180,7 +183,7 @@ class XUIClient:
         code = getattr(r, "status_code", None)
         if code != 200:
             body = (getattr(r, "text", "") or "")[:150]
-            raise RuntimeError(f"addclient_http_{code} | url={add_url} | resp={body}")
+            raise RuntimeError(f"addclient_http_{code} | auth={'token' if self.api_token else 'session'} | url={add_url} | resp={body}")
         try:
             ok = r.json().get("success", False)
         except Exception:
@@ -533,6 +536,7 @@ _PANEL_STEPS = [
     ("web_base_path", "📁 مسیر پایهٔ پنل (web base path). اگر نداری یا مطمئن نیستی بنویس: -  (پیش‌فرض روی sub تنظیم می‌شود)", str),
     ("username", "👤 یوزرنیم لاگین پنل:", str),
     ("password", "🔑 پسورد لاگین پنل:", str),
+    ("api_token", "🔐 توکن API پنل (از Settings ← Security ← API Token). اگر نداری بنویس: -  (شدیداً توصیه می‌شود بسازی؛ خیلی پایدارتر از یوزر/پسورد است)", str),
     ("inbound_id", "🔢 آیدی اینباند (inbound id) — معمولاً 1:", int),
     ("sub_url_base", "🔗 مبنای لینک ساب (مثلاً https://mypanel.up.railway.app:2096/sub):", str),
 ]
@@ -569,7 +573,7 @@ async def handle_cfg_admin_message(message, bot, db, save_db, user_states, main_
         if idx == 0:
             _PADD_TMP[user_id] = {}
         key, _prompt, caster = _PANEL_STEPS[idx]
-        if key == "web_base_path" and val in ("-", "—", ""):
+        if key in ("web_base_path", "api_token") and val in ("-", "—", ""):
             val = ""
         else:
             try:
