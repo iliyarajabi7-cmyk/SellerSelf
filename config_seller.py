@@ -21,7 +21,7 @@ try:
 except Exception:
     cffi_requests = None
     _HAS_CFFI = False
-print(f"[config_seller] build=diag-v6-authfix curl_cffi={_HAS_CFFI}", flush=True)
+print(f"[config_seller] build=diag-v7-authsurface curl_cffi={_HAS_CFFI}", flush=True)
 from datetime import datetime, timezone, timedelta
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -152,29 +152,61 @@ class XUIClient:
             raise RuntimeError(f"login_failed | resp={body}")
 
     def _probe(self, method, path):
-        """فقط برای تشخیص: یک درخواست ساده می‌زند و کد وضعیت را برمی‌گرداند."""
+        """برای تشخیص: کد وضعیت + نوع پاسخ (json/loginhtml/...) را برمی‌گرداند."""
         try:
             url = f"{self.base}{path}"
             if method == "GET":
                 rr = self.s.get(url, timeout=15)
             else:
                 rr = self.s.post(url, timeout=15)
-            return str(getattr(rr, "status_code", "None"))
+            code = getattr(rr, "status_code", "None")
+            txt = getattr(rr, "text", "") or ""
+            try:
+                j = rr.json()
+                kind = "json" if isinstance(j, dict) else "jsonarr"
+            except Exception:
+                low = txt.lower()
+                kind = "loginhtml" if ("login" in low or "<html" in low) else "txt"
+            return f"{code}:{kind}"
         except Exception as e:
             return f"ERR:{type(e).__name__}"
 
-    def create_config(self, email, gb, days):
-        if not self.base or (not self.username and not self.api_token):
-            raise RuntimeError("panel_not_configured")
-        # پنل‌های 3x-ui استاندارد فقط با کوکی سشن کار می‌کنند و توکن Bearer را
-        # نمی‌شناسند؛ پس اگر یوزر/پسورد داریم حتماً سشن لاگین می‌گیریم.
-        # اگر لاگین شکست خورد ولی توکن داریم، با توکن ادامه می‌دهیم.
-        if self.username and self.password:
+    def _get_inbounds(self):
+        """لیست اینباندها را برمی‌گرداند؛ اگر پاسخ JSON معتبرِ پنل نبود None."""
+        for path in ("/panel/api/inbounds/list", "/panel/inbound/list"):
             try:
-                self._login()
+                r = self.s.get(f"{self.base}{path}", timeout=20)
+                if getattr(r, "status_code", None) != 200:
+                    continue
+                data = r.json()
             except Exception:
-                if not self.api_token:
-                    raise
+                continue
+            if isinstance(data, dict) and isinstance(data.get("obj"), list):
+                return data["obj"]
+        return None
+
+    def _result(self, sub_id, client_uuid, email):
+        sub_link = f"{self.sub_url_base}/{sub_id}" if self.sub_url_base else ""
+        return {"sub_link": sub_link, "uuid": client_uuid, "email": email, "sub_id": sub_id}
+
+    def create_config(self, email, gb, days):
+        if not self.base:
+            raise RuntimeError("panel_not_configured (base_url خالی است)")
+        if not (self.username and self.password) and not self.api_token:
+            raise RuntimeError("panel_not_configured (نه یوزر/پسورد و نه توکن)")
+        # روش درستِ 3x-ui: لاگین سشن. اگر یوزر/پسورد داریم، لاگین باید موفق شود؛
+        # خطای لاگین را دیگر پنهان نمی‌کنیم تا اگر رمز/مسیر اشتباه بود دقیق ببینیم.
+        if self.username and self.password:
+            self._login()
+        # تأیید اینکه واقعاً سشن گرفتیم و پاسخ، JSON پنل است (نه صفحهٔ لاگین).
+        inbounds = self._get_inbounds()
+        if inbounds is None:
+            chk = self._probe("GET", "/panel/api/inbounds/list")
+            raise RuntimeError(
+                "auth_not_established (لیست اینباند JSON برنگرداند؛ یعنی لاگین/دسترسی "
+                f"برقرار نشد — احتمالاً یوزرنیم/پسورد یا مسیر پایه اشتباه است) "
+                f"| list_probe={chk} | base={self.base}"
+            )
         client_uuid = str(uuid.uuid4())
         sub_id = uuid.uuid4().hex[:16]
         total_bytes = int(gb) * 1024 * 1024 * 1024
@@ -190,45 +222,69 @@ class XUIClient:
             "flow": "",
             "limitIp": 0,
         }
+        diags = []
+        # روش ۱: endpoint استاندارد addClient
         payload = {"id": self.inbound_id, "settings": json.dumps({"clients": [client]})}
-        # مسیر API استاندارد؛ اگر روی این نسخه نبود (۴۰۴)، به مسیر وب‌یوآی خودِ
-        # پنل (session-based) برمی‌گردیم که همیشه وجود دارد.
-        candidate_paths = [
-            "/panel/api/inbounds/addClient",
-            "/panel/inbound/addClient",
-        ]
-        last_diag = ""
-        for path in candidate_paths:
+        for path in ("/panel/api/inbounds/addClient", "/panel/inbound/addClient"):
             add_url = f"{self.base}{path}"
             r = self.s.post(add_url, data=payload, timeout=25)
             code = getattr(r, "status_code", None)
-            if code == 404:
-                last_diag = f"404@{add_url}"
-                continue
-            if code != 200:
-                body = (getattr(r, "text", "") or "")[:120]
-                st = self._probe("GET", "/panel/api/server/status")
-                lst = self._probe("GET", "/panel/api/inbounds/list")
-                raise RuntimeError(
-                    f"addclient_http_{code} | auth={'token' if self.api_token else 'session'} "
-                    f"| status_probe={st} | inbounds_list={lst} "
-                    f"| url={add_url} | resp={body}"
-                )
+            body = (getattr(r, "text", "") or "")[:120]
+            if code == 200:
+                try:
+                    ok = bool(r.json().get("success", False))
+                except Exception:
+                    ok = False
+                if ok:
+                    return self._result(sub_id, client_uuid, email)
+                diags.append(f"{path}->200/not_success:{body}")
+            else:
+                diags.append(f"{path}->{code}:{body[:60]}")
+        # روش ۲ (فالبک مطمئن): کل اینباند را می‌گیریم، کلاینت را اضافه می‌کنیم و
+        # اینباند را به‌روزرسانی می‌کنیم. این endpoint تقریباً در همهٔ نسخه‌ها هست.
+        target = None
+        for ib in inbounds:
             try:
-                ok = r.json().get("success", False)
+                if int(ib.get("id", -1)) == self.inbound_id:
+                    target = ib
+                    break
             except Exception:
-                ok = False
-            if not ok:
-                body = (getattr(r, "text", "") or "")[:150]
-                raise RuntimeError(f"add_client_failed | url={add_url} | resp={body}")
-            sub_link = f"{self.sub_url_base}/{sub_id}" if self.sub_url_base else ""
-            return {"sub_link": sub_link, "uuid": client_uuid, "email": email, "sub_id": sub_id}
-        # هر دو مسیر ۴۰۴ دادند
-        st = self._probe("GET", "/panel/api/server/status")
-        lst = self._probe("GET", "/panel/api/inbounds/list")
+                continue
+        if target is None:
+            ids = [ib.get("id") for ib in inbounds]
+            raise RuntimeError(
+                f"inbound_not_found (id={self.inbound_id}) | اینباندهای موجود: {ids} "
+                f"| addclient_diag={' ; '.join(diags)}"
+            )
+        try:
+            settings_obj = json.loads(target.get("settings") or "{}")
+        except Exception:
+            settings_obj = {}
+        if not isinstance(settings_obj.get("clients"), list):
+            settings_obj["clients"] = []
+        settings_obj["clients"].append(client)
+        upd_payload = dict(target)
+        upd_payload["settings"] = json.dumps(settings_obj)
+        for upath in (
+            f"/panel/inbound/update/{self.inbound_id}",
+            f"/panel/api/inbounds/update/{self.inbound_id}",
+        ):
+            u_url = f"{self.base}{upath}"
+            r = self.s.post(u_url, data=upd_payload, timeout=25)
+            code = getattr(r, "status_code", None)
+            body = (getattr(r, "text", "") or "")[:120]
+            if code == 200:
+                try:
+                    ok = bool(r.json().get("success", False))
+                except Exception:
+                    ok = False
+                if ok:
+                    return self._result(sub_id, client_uuid, email)
+                diags.append(f"{upath}->200/not_success:{body}")
+            else:
+                diags.append(f"{upath}->{code}:{body[:60]}")
         raise RuntimeError(
-            f"addclient_all_404 | auth={'token' if self.api_token else 'session'} "
-            f"| status_probe={st} | inbounds_list={lst} | last={last_diag} | base={self.base}"
+            "add_client_failed_all | " + " ; ".join(diags) + f" | base={self.base}"
         )
 
 # ============================================================
