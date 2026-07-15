@@ -116,7 +116,23 @@ class XUIClient:
             "Referer": f"{base}/",
         })
 
+    def _csrf(self):
+        # پنل‌های جدید 3x-ui برای POST /login توکن CSRF می‌خواهند；
+        # اول باید آن را از /csrf-token گرفت و در هدر X-CSRF-Token گذاشت.
+        try:
+            r = self.s.get(f"{self.base}/csrf-token", timeout=20)
+            token = (r.json() or {}).get("obj")
+            if token:
+                self.s.headers.update({"X-CSRF-Token": token})
+                return token
+        except Exception:
+            pass
+        return None
+
     def _login(self):
+        # گام ۱: گرفتن توکن CSRF (و کوکی سشن)
+        self._csrf()
+        # گام ۲: لاگین همراه توکن
         r = self.s.post(
             f"{self.base}/login",
             data={"username": self.username, "password": self.password},
@@ -129,6 +145,8 @@ class XUIClient:
             ok = False
         if not ok:
             raise RuntimeError("login_failed")
+        # بعد از لاگین سشن عوض می‌شود؛ توکن را برای درخواست‌های بعدی (addClient) تازه می‌کنیم
+        self._csrf()
 
     def create_config(self, email, gb, days):
         if not self.base or not self.username:
