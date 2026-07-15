@@ -21,7 +21,7 @@ try:
 except Exception:
     cffi_requests = None
     _HAS_CFFI = False
-print(f"[config_seller] build=diag-v2 curl_cffi={_HAS_CFFI}", flush=True)
+print(f"[config_seller] build=diag-v3 curl_cffi={_HAS_CFFI}", flush=True)
 from datetime import datetime, timezone, timedelta
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -151,8 +151,9 @@ class XUIClient:
         if not ok:
             body = (getattr(r, "text", "") or "")[:150]
             raise RuntimeError(f"login_failed | resp={body}")
-        # بعد از لاگین سشن عوض می‌شود؛ توکن را برای درخواست‌های بعدی (addClient) تازه می‌کنیم
-        self._csrf()
+        # مهم: بعد از لاگین دیگر /csrf-token را صدا نمی‌زنیم؛
+        # آن کار کوکی سشنِ احراز‌شده را با یک سشن ناشناس عوض می‌کرد و addClient با ۴۰۴ رد می‌شد.
+        # توکن CSRFِ قبل از لاگین در همان کوکی سشن باقی می‌ماند و معتبر است.
 
     def create_config(self, email, gb, days):
         if not self.base or not self.username:
@@ -174,14 +175,19 @@ class XUIClient:
             "limitIp": 0,
         }
         payload = {"id": self.inbound_id, "settings": json.dumps({"clients": [client]})}
-        r = self.s.post(f"{self.base}/panel/api/inbounds/addClient", data=payload, timeout=25)
-        r.raise_for_status()
+        add_url = f"{self.base}/panel/api/inbounds/addClient"
+        r = self.s.post(add_url, data=payload, timeout=25)
+        code = getattr(r, "status_code", None)
+        if code != 200:
+            body = (getattr(r, "text", "") or "")[:150]
+            raise RuntimeError(f"addclient_http_{code} | url={add_url} | resp={body}")
         try:
             ok = r.json().get("success", False)
         except Exception:
             ok = False
         if not ok:
-            raise RuntimeError("add_client_failed")
+            body = (getattr(r, "text", "") or "")[:150]
+            raise RuntimeError(f"add_client_failed | resp={body}")
         sub_link = f"{self.sub_url_base}/{sub_id}" if self.sub_url_base else ""
         return {"sub_link": sub_link, "uuid": client_uuid, "email": email, "sub_id": sub_id}
 
@@ -368,7 +374,7 @@ async def handle_cfg_callback(callback_query, bot, db, save_db, main_menu_keyboa
         db[str(user_id)]["mah_balance"] = bal - price
         save_db(db)
         await _safe_edit(msg, _fmt_config_msg(gb, days, res), _back_home_kb())
-        return await callback_query.answer("✅ خرید موفق!")
+        return await callback_query.answer("✅ خرید مو��ق!")
 
     # -------- تست رایگان --------
     if data == "cfg_free":
