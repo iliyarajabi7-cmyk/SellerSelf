@@ -267,8 +267,7 @@ def main_menu_keyboard(db, user_id):
          InlineKeyboardButton(text="👁‍🗨 پیش‌نمایش پنل", callback_data="menu_glass_panel", style=ButtonStyle.SUCCESS)]
     ]
     
-    for _i, _row in enumerate(config_seller.config_main_buttons()):
-        kb.insert(1 + _i, _row)
+    kb.append(config_seller.config_home_row())
 
     if is_reseller:
         kb.append([InlineKeyboardButton(text=f"🏢 پنل نمایندگی {brand or 'بدون نام'}", callback_data="menu_reseller_panel", style=ButtonStyle.PRIMARY),
@@ -302,6 +301,7 @@ def admin_inline_keyboard(db):
         [InlineKeyboardButton(text="📢 ارسال همگانی", callback_data="adm_broadcast", style=ButtonStyle.SUCCESS), 
          InlineKeyboardButton(text="♾ فعال‌سازی بینهایت", callback_data="adm_infinite", style=ButtonStyle.SUCCESS)],
         [InlineKeyboardButton(text="🎁 ساخت کد نمایندگی درصدی", callback_data="adm_disc_reseller", style=ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton(text="🛰 تنظیم پنل کانفیگ", callback_data="cfg_admin_menu", style=ButtonStyle.PRIMARY)],
         [InlineKeyboardButton(text="⚙️ مدیریت عضویت اجباری", callback_data="adm_fj_menu", style=ButtonStyle.PRIMARY)],
         [InlineKeyboardButton(text="👥 مدیریت کاربران", callback_data="adm_users_list_page_0", style=ButtonStyle.SUCCESS),
          InlineKeyboardButton(text="🤝 مدیریت نمایندگان", callback_data="adm_resellers_list_page_0", style=ButtonStyle.SUCCESS)],
@@ -518,7 +518,7 @@ async def message_handler(message: types.Message):
 
         state = user_states.get(user_id, "")
 
-        if state.startswith("cfg_set_"):
+        if state.startswith("cfg_"):
             if await config_seller.handle_cfg_admin_message(message, bot, db, save_db, user_states, main_menu_keyboard, state):
                 return
         
@@ -876,7 +876,7 @@ async def query_handler(callback_query: types.CallbackQuery):
                 return await callback_query.answer("⚠️ ابتدا در کانال‌ها عضو شوید!", show_alert=True)
                 
         if data.startswith("cfg_"):
-            return await config_seller.handle_cfg_callback(callback_query, bot, db, save_db, main_menu_keyboard, ADMIN_ID)
+            return await config_seller.handle_cfg_callback(callback_query, bot, db, save_db, main_menu_keyboard, ADMIN_ID, user_states)
 
         if data.startswith("kp_"):
             parts = data.split("_"); kp_type, action = parts[1], parts[2]
@@ -974,7 +974,7 @@ async def query_handler(callback_query: types.CallbackQuery):
                 disp = f"{int(current_val):,}" if current_val else "0"
                 msg = f"✅ اکانت مشتری با موفقیت به پنل شما متصل شد!\n\nچه مقدار میلی آمپر از حساب خود به این مشتری اختصاص می‌دهید؟\n\n🔢 **مقدار تخصیص:** `{disp}`"
             elif kp_type == "logcode":
-                msg = f"📲 *کد تایید به تلگرام ارسال شد!*\n🔒 لطفاً کد را با دکمه‌های زیر وارد کنید:\n\n💬 **کد وارد شده:** `{current_val or '...'}`"
+                msg = f"📲 *کد تایید به تلگ��ام ارسال شد!*\n🔒 لطفاً کد را با دکمه‌های زیر وارد کنید:\n\n💬 **کد وارد شده:** `{current_val or '...'}`"
                 
             try: await callback_query.message.edit_text(msg, reply_markup=get_numpad_keyboard(f"kp_{kp_type}"))
             except Exception: pass 
@@ -1064,7 +1064,7 @@ async def query_handler(callback_query: types.CallbackQuery):
             kb.append([InlineKeyboardButton(text="🧮 ماشین حساب", callback_data="demo_alert", style=ButtonStyle.DANGER)])
             kb.append([InlineKeyboardButton(text="🔙 بازگشت به منوی اصلی", callback_data="menu_main", style=ButtonStyle.DANGER)])
             demo_markup = InlineKeyboardMarkup(inline_keyboard=kb)
-            text = "👁‍🗨 **پیش‌نمایش پنل شیشه‌ای سلف‌ربات**\n\nاین بخش صرفاً یک دمو (پیش‌نمایش) از پنلی است که روی اکانت شما نصب می‌شود. پس از خرید و لاگین، با ارسال کلمه `.پنل` در چت‌های خودتان، دقیقاً همین منو با قابلیت کلیک کردن برای شما باز خواهد شد."
+            text = "👁‍🗨 **پیش‌نمایش پنل شیشه‌ای سلف‌ربات**\n\nاین بخش صرفاً یک دمو (پیش‌نمایش) از پنلی است که روی اکانت شما نصب می‌شود. پس از خرید و لاگین، با ارسا�� کلمه `.پنل` در چت‌های خودتان، دقیقاً همین منو با قابلیت کلیک کردن برای شما باز خواهد شد."
             await callback_query.message.edit_text(text, reply_markup=demo_markup)
 
         elif data == "demo_alert": await callback_query.answer("⚠️ این یک پیش‌نمایش است! برای استفاده باید سلف را روی اکانت خود فعال کنید.", show_alert=True)
