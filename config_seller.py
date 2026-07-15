@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 # ============================================================
-#  ماژول فروش کانفیگ (3x-ui) - پلاگین مستقل برای master_bot.py
-#  واحد پول: میلی‌آمپر (mah_balance)
-#  این فایل به ساختار ربات دست نمی‌زند؛ فقط از بیرون وصل می‌شود.
-#  قابلیت‌ها:
-#   - منوی خرید کانفیگ (حجم متغیر با فلش، مدت ثابت ۳۰ روز)
-#   - تست رایگان (۱ گیگ / ۱ روز)
-#   - مدیریت کانفیگ من
-#   - استخر چندپنله (افزودن/حذف/لیست) با سقف ۷۵ گیگ برای هر پنل
-#   - تنظیم قیمت هر گیگ از پنل مدیریت
+# ماژول فروش کانفیگ (3x-ui) - پلاگین مستقل برای master_bot.py
+# واحد پول: میلی‌آمپر (mah_balance)
+# این فایل به ساختار ربات دست نمی‌زند؛ فقط از بیرون وصل می‌شود.
+# قابلیت‌ها:
+# - منوی خرید کانفیگ (حجم متغیر با فلش، مدت ثابت ۳۰ روز)
+# - تست رایگان (۱ گیگ / ۱ روز)
+# - مدیریت کانفیگ من
+# - استخر چندپنله (افزودن/حذف/لیست) با سقف ۷۵ گیگ برای هر پنل
+# - تنظیم قیمت هر گیگ از پنل مدیریت
 # ============================================================
 import asyncio
 import json
@@ -21,7 +21,7 @@ try:
 except Exception:
     cffi_requests = None
     _HAS_CFFI = False
-print(f"[config_seller] build=diag-v5 curl_cffi={_HAS_CFFI}", flush=True)
+print(f"[config_seller] build=diag-v6-authfix curl_cffi={_HAS_CFFI}", flush=True)
 from datetime import datetime, timezone, timedelta
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -33,18 +33,17 @@ IRAN_TZ = timezone(timedelta(hours=3, minutes=30))
 # مقادیر پیش‌فرض (داخل db["config"]["xui"])
 # ------------------------------------------------------------
 DEFAULT_XUI = {
-    "price_per_gb": 150,       # میلی‌آمپر به ازای هر گیگ
-    "gb_step": 1,              # گام دکمه‌های +/- حجم
+    "price_per_gb": 150,      # میلی‌آمپر به ازای هر گیگ
+    "gb_step": 1,             # گام دکمه‌های +/- حجم
     "min_gb": 1,
     "max_gb": 75,
-    "fixed_days": 30,          # مدت ثابت خرید
-    "free_test_gb": 1,         # تست رایگان: حجم
-    "free_test_days": 1,       # تست رایگان: مدت
-    "free_test_once": True,    # تست رایگان فقط یک‌بار برای هر کاربر
-    "cap_per_panel": 75,       # سقف حجم هر پنل (گیگ)
+    "fixed_days": 30,         # مدت ثابت خرید
+    "free_test_gb": 1,        # تست رایگان: حجم
+    "free_test_days": 1,      # تست رایگان: مدت
+    "free_test_once": True,   # تست رایگان فقط یک‌بار برای هر کاربر
+    "cap_per_panel": 75,      # سقف حجم هر پنل (گیگ)
     "panels": [],             # استخر پنل‌ها
 }
-
 
 def ensure_config(db):
     if "config" not in db:
@@ -58,23 +57,18 @@ def ensure_config(db):
     db["config"]["xui"] = xui
     return xui
 
-
 def _now_ms():
     return int(time.time() * 1000)
-
 
 def calc_price(xui, gb):
     # مدت ثابت است، پس مبلغ = حجم × قیمت هر گیگ
     return int(gb * xui["price_per_gb"])
 
-
 def _panel_remaining(p):
     return int(p.get("cap_gb", 75)) - int(p.get("used_gb", 0))
 
-
 def _panel_is_full(p):
     return (not p.get("active", True)) or _panel_remaining(p) <= 0
-
 
 def pick_panel(xui, gb):
     """اولین پنل فعال که جا برای gb دارد را برمی‌گرداند."""
@@ -83,15 +77,15 @@ def pick_panel(xui, gb):
             return p
     return None
 
-
 # ============================================================
-#  کلاینت API پنل 3x-ui
+# کلاینت API پنل 3x-ui
 # ============================================================
 class XUIClient:
     def __init__(self, panel):
         origin = (panel.get("base_url") or "").rstrip("/")
         wbp = (panel.get("web_base_path") or "").strip("/")
         # اگر ادمین مسیر پایه را وارد نکرد، پیش‌فرض روی sub می‌گذاریم
+        # (برای این پنل مسیر ورود واقعاً /sub/ است، پس این پیش‌فرض درست است)
         if not wbp:
             wbp = "sub"
         base = f"{origin}/{wbp}"
@@ -116,19 +110,20 @@ class XUIClient:
             "Origin": origin,
             "Referer": f"{base}/",
         })
-        # روش مطمئن: اگر توکن API داده شده، با هدر Authorization احراز هویت می‌کنیم (بدون نیاز به کوکی سشن)
+        # اگر توکن API داده شده باشد، هدر Authorization را هم اضافه می‌کنیم
+        # (بعضی فورک‌ها از آن پشتیبانی می‌کنند). ولی روش اصلی، لاگین سشن است.
         if self.api_token:
             self.s.headers.update({"Authorization": f"Bearer {self.api_token}"})
 
     def _csrf(self):
-        # پنل‌های جدید 3x-ui برای POST /login توکن CSRF می‌خواهند；
+        # پنل‌های جدید 3x-ui برای POST /login توکن CSRF می‌خواهند:
         # اول باید آن را از /csrf-token گرفت و در هدر X-CSRF-Token گذاشت.
         try:
             r = self.s.get(f"{self.base}/csrf-token", timeout=20)
             token = (r.json() or {}).get("obj")
             if token:
                 self.s.headers.update({"X-CSRF-Token": token})
-                return token
+            return token
         except Exception:
             pass
         return None
@@ -171,9 +166,15 @@ class XUIClient:
     def create_config(self, email, gb, days):
         if not self.base or (not self.username and not self.api_token):
             raise RuntimeError("panel_not_configured")
-        # با توکن API نیازی به لاگین/کوکی سشن نیست؛ مستقیم با هدر Authorization کار می‌کنیم
-        if not self.api_token:
-            self._login()
+        # پنل‌های 3x-ui استاندارد فقط با کوکی سشن کار می‌کنند و توکن Bearer را
+        # نمی‌شناسند؛ پس اگر یوزر/پسورد داریم حتماً سشن لاگین می‌گیریم.
+        # اگر لاگین شکست خورد ولی توکن داریم، با توکن ادامه می‌دهیم.
+        if self.username and self.password:
+            try:
+                self._login()
+            except Exception:
+                if not self.api_token:
+                    raise
         client_uuid = str(uuid.uuid4())
         sub_id = uuid.uuid4().hex[:16]
         total_bytes = int(gb) * 1024 * 1024 * 1024
@@ -190,36 +191,51 @@ class XUIClient:
             "limitIp": 0,
         }
         payload = {"id": self.inbound_id, "settings": json.dumps({"clients": [client]})}
-        add_url = f"{self.base}/panel/api/inbounds/addClient"
-        r = self.s.post(add_url, data=payload, timeout=25)
-        code = getattr(r, "status_code", None)
-        if code != 200:
-            body = (getattr(r, "text", "") or "")[:120]
-            st = self._probe("GET", "/panel/api/server/status")
-            oa = self._probe("GET", "/panel/api/openapi.json")
-            lst = self._probe("GET", "/panel/api/inbounds/list")
-            raise RuntimeError(
-                f"addclient_http_{code} | auth={'token' if self.api_token else 'session'} "
-                f"| status_probe={st} | openapi_probe={oa} | inbounds_list={lst} "
-                f"| url={add_url} | resp={body}"
-            )
-        try:
-            ok = r.json().get("success", False)
-        except Exception:
-            ok = False
-        if not ok:
-            body = (getattr(r, "text", "") or "")[:150]
-            raise RuntimeError(f"add_client_failed | resp={body}")
-        sub_link = f"{self.sub_url_base}/{sub_id}" if self.sub_url_base else ""
-        return {"sub_link": sub_link, "uuid": client_uuid, "email": email, "sub_id": sub_id}
-
+        # مسیر API استاندارد؛ اگر روی این نسخه نبود (۴۰۴)، به مسیر وب‌یوآی خودِ
+        # پنل (session-based) برمی‌گردیم که همیشه وجود دارد.
+        candidate_paths = [
+            "/panel/api/inbounds/addClient",
+            "/panel/inbound/addClient",
+        ]
+        last_diag = ""
+        for path in candidate_paths:
+            add_url = f"{self.base}{path}"
+            r = self.s.post(add_url, data=payload, timeout=25)
+            code = getattr(r, "status_code", None)
+            if code == 404:
+                last_diag = f"404@{add_url}"
+                continue
+            if code != 200:
+                body = (getattr(r, "text", "") or "")[:120]
+                st = self._probe("GET", "/panel/api/server/status")
+                lst = self._probe("GET", "/panel/api/inbounds/list")
+                raise RuntimeError(
+                    f"addclient_http_{code} | auth={'token' if self.api_token else 'session'} "
+                    f"| status_probe={st} | inbounds_list={lst} "
+                    f"| url={add_url} | resp={body}"
+                )
+            try:
+                ok = r.json().get("success", False)
+            except Exception:
+                ok = False
+            if not ok:
+                body = (getattr(r, "text", "") or "")[:150]
+                raise RuntimeError(f"add_client_failed | url={add_url} | resp={body}")
+            sub_link = f"{self.sub_url_base}/{sub_id}" if self.sub_url_base else ""
+            return {"sub_link": sub_link, "uuid": client_uuid, "email": email, "sub_id": sub_id}
+        # هر دو مسیر ۴۰۴ دادند
+        st = self._probe("GET", "/panel/api/server/status")
+        lst = self._probe("GET", "/panel/api/inbounds/list")
+        raise RuntimeError(
+            f"addclient_all_404 | auth={'token' if self.api_token else 'session'} "
+            f"| status_probe={st} | inbounds_list={lst} | last={last_diag} | base={self.base}"
+        )
 
 # ============================================================
-#  دکمهٔ ورودی منوی اصلی (تک‌دکمه)
+# دکمهٔ ورودی منوی اصلی (تک‌دکمه)
 # ============================================================
 def config_home_row():
     return [InlineKeyboardButton(text="🛒 خرید کانفیگ", callback_data="cfg_home", style=ButtonStyle.SUCCESS)]
-
 
 def _home_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -229,13 +245,11 @@ def _home_keyboard():
         [InlineKeyboardButton(text="🔙 بازگشت", callback_data="menu_main", style=ButtonStyle.DANGER)],
     ])
 
-
 def _home_text():
     return (
         "🛒 *بخش کانفیگ*\n\n"
         "یکی از گزینه‌های زیر را انتخاب کنید:"
     )
-
 
 def _buy_keyboard(gb):
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -248,12 +262,10 @@ def _buy_keyboard(gb):
         [InlineKeyboardButton(text="🔙 بازگشت", callback_data="cfg_home", style=ButtonStyle.DANGER)],
     ])
 
-
 _DISABLED_TEXT = (
     "🔧 بخش کانفیگ فعلاً غیرفعال است و به‌زودی فعال خواهد شد.\n\n"
     "🙏 لطفاً کمی بعد دوباره تلاش کنید."
 )
-
 
 def _requester_tag(cq):
     u = cq.from_user
@@ -261,16 +273,13 @@ def _requester_tag(cq):
     name = getattr(u, "full_name", "") or ""
     return f"👤 درخواست‌دهنده: {name}\n🆔 آیدی عددی: `{u.id}`\n🔖 یوزرنیم: {uname}"
 
-
 # state موقت انتخاب حجم (در حافظه)
 _BUY_STATE = {}
-
 
 def _get_gb(user_id, xui):
     if user_id not in _BUY_STATE:
         _BUY_STATE[user_id] = xui["min_gb"]
     return _BUY_STATE[user_id]
-
 
 def _buy_text(db, user_id, xui):
     gb = _get_gb(user_id, xui)
@@ -288,7 +297,6 @@ def _buy_text(db, user_id, xui):
         "⚙️ با دکمه‌های ➕ و ➖ حجم را تنظیم کنید."
     )
 
-
 def _fmt_config_msg(gb, days, res):
     link = res.get("sub_link") or "(لینک ساب تنظیم نشده)"
     return (
@@ -299,7 +307,6 @@ def _fmt_config_msg(gb, days, res):
         "💡 این لینک را در v2rayNG / v2rayN / Streisand وارد کنید.\n"
         "📂 همیشه از «مدیریت کانفیگ من» در دسترس است."
     )
-
 
 def _mine_text(db, user_id):
     cfgs = db[str(user_id)].get("configs", [])
@@ -313,13 +320,11 @@ def _mine_text(db, user_id):
         )
     return "\n".join(lines)
 
-
 def _back_home_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 بازگشت به ��خش کانفیگ", callback_data="cfg_home", style=ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton(text="🔙 بازگشت به بخش کانفیگ", callback_data="cfg_home", style=ButtonStyle.PRIMARY)],
         [InlineKeyboardButton(text="🏠 منوی اصلی", callback_data="menu_main", style=ButtonStyle.DANGER)],
     ])
-
 
 async def _make_and_store(db, user_id, gb, days, xui, is_free, panel):
     email = f"u{user_id}_{uuid.uuid4().hex[:6]}"
@@ -340,9 +345,8 @@ async def _make_and_store(db, user_id, gb, days, xui, is_free, panel):
         panel["active"] = False
     return res
 
-
 # ============================================================
-#  هندلر کالبک‌ها (master_bot تمام cfg_* را به این می‌سپارد)
+# هندلر کالبک‌ها (master_bot تمام cfg_* را به این می‌سپارد)
 # ============================================================
 async def handle_cfg_callback(callback_query, bot, db, save_db, main_menu_keyboard, ADMIN_ID, user_states):
     data = callback_query.data
@@ -396,7 +400,7 @@ async def handle_cfg_callback(callback_query, bot, db, save_db, main_menu_keyboa
         db[str(user_id)]["mah_balance"] = bal - price
         save_db(db)
         await _safe_edit(msg, _fmt_config_msg(gb, days, res), _back_home_kb())
-        return await callback_query.answer("✅ خرید مو��ق!")
+        return await callback_query.answer("✅ خرید موفق!")
 
     # -------- تست رایگان --------
     if data == "cfg_free":
@@ -434,7 +438,6 @@ async def handle_cfg_callback(callback_query, bot, db, save_db, main_menu_keyboa
 
     return await callback_query.answer()
 
-
 def _admin_menu_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="➕ افزودن پنل", callback_data="cfg_padd", style=ButtonStyle.SUCCESS)],
@@ -443,7 +446,6 @@ def _admin_menu_kb():
         [InlineKeyboardButton(text="💲 تنظیم قیمت هر گیگ", callback_data="cfg_setprice", style=ButtonStyle.PRIMARY)],
         [InlineKeyboardButton(text="🔙 بازگشت به پنل مدیریت", callback_data="menu_admin", style=ButtonStyle.DANGER)],
     ])
-
 
 def _admin_menu_text(xui):
     panels = xui.get("panels", [])
@@ -455,7 +457,6 @@ def _admin_menu_text(xui):
         f"📦 سقف هر پنل: `{xui['cap_per_panel']}` گیگ\n"
         f"🟢 پنل فعال: `{len(active)}` | 🔴 پرشده: `{len(full)}`"
     )
-
 
 def _plist_text(xui):
     panels = xui.get("panels", [])
@@ -478,7 +479,6 @@ def _plist_text(xui):
         out.append("‌— هیچ‌کدام")
     return "\n".join(out)
 
-
 def _pdel_kb(xui):
     kb = []
     for p in xui.get("panels", []):
@@ -488,7 +488,6 @@ def _pdel_kb(xui):
             callback_data=f"cfg_delp_{p['id']}", style=ButtonStyle.DANGER)])
     kb.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="cfg_admin_menu", style=ButtonStyle.PRIMARY)])
     return InlineKeyboardMarkup(inline_keyboard=kb)
-
 
 async def _handle_admin_cb(callback_query, bot, db, save_db, xui, user_states, ADMIN_ID):
     data = callback_query.data
@@ -529,7 +528,6 @@ async def _handle_admin_cb(callback_query, bot, db, save_db, xui, user_states, A
 
     return await callback_query.answer()
 
-
 async def _safe_edit(message, text, kb):
     try:
         await message.edit_text(text, reply_markup=kb)
@@ -539,33 +537,29 @@ async def _safe_edit(message, text, kb):
         except Exception:
             pass
 
-
 async def _notify_admin(bot, ADMIN_ID, text):
     try:
         await bot.send_message(ADMIN_ID, text)
     except Exception:
         pass
 
-
 # ============================================================
-#  مراحل افزودن پنل + تنظیم قیمت (ورودی متنی ادمین)
+# مراحل افزودن پنل + تنظیم قیمت (ورودی متنی ادمین)
 # ============================================================
 _PANEL_STEPS = [
     ("base_url", "🌐 آدرس پنل را بفرست (مثلاً https://mypanel.up.railway.app):", str),
-    ("web_base_path", "📁 مسیر پایهٔ پنل (web base path). اگر نداری یا مطمئن نیستی بنویس: -  (پیش‌فرض روی sub تنظیم می‌شود)", str),
+    ("web_base_path", "📁 مسیر پایهٔ پنل (web base path). اگر نداری یا مطمئن نیستی بنویس: - (پیش‌فرض روی sub تنظیم می‌شود)", str),
     ("username", "👤 یوزرنیم لاگین پنل:", str),
     ("password", "🔑 پسورد لاگین پنل:", str),
-    ("api_token", "🔐 توکن API پنل (از Settings ← Security ← API Token). اگر نداری بنویس: -  (شدیداً توصیه می‌شود بسازی؛ خیلی پایدارتر از یوزر/پسورد است)", str),
+    ("api_token", "🔐 توکن API پنل (از Settings ← Security ← API Token). اگر نداری بنویس: - (اختیاری؛ روش اصلی همان یوزر/پسورد است)", str),
     ("inbound_id", "🔢 آیدی اینباند (inbound id) — معمولاً 1:", int),
     ("sub_url_base", "🔗 مبنای لینک ساب (مثلاً https://mypanel.up.railway.app:2096/sub):", str),
 ]
 _ADMIN_STEPS = _PANEL_STEPS  # سازگاری با دستور /panelset
 _PADD_TMP = {}
 
-
 def admin_start_state():
     return "cfg_padd_0"
-
 
 async def handle_cfg_admin_message(message, bot, db, save_db, user_states, main_menu_keyboard, state):
     """ورودی‌های متنی ادمین برای افزودن پنل و تنظیم قیمت. اگر مربوط نباشد False."""
