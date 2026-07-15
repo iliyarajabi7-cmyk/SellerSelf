@@ -1,6 +1,7 @@
 pyrogram
 tgcrypto
 requests
+curl_cffi
 yt-dlp
 edge-tts
 flask
