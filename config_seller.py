@@ -21,7 +21,7 @@ try:
 except Exception:
     cffi_requests = None
     _HAS_CFFI = False
-print(f"[config_seller] build=diag-v4 curl_cffi={_HAS_CFFI}", flush=True)
+print(f"[config_seller] build=diag-v5 curl_cffi={_HAS_CFFI}", flush=True)
 from datetime import datetime, timezone, timedelta
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -156,6 +156,18 @@ class XUIClient:
             body = (getattr(r, "text", "") or "")[:150]
             raise RuntimeError(f"login_failed | resp={body}")
 
+    def _probe(self, method, path):
+        """فقط برای تشخیص: یک درخواست ساده می‌زند و کد وضعیت را برمی‌گرداند."""
+        try:
+            url = f"{self.base}{path}"
+            if method == "GET":
+                rr = self.s.get(url, timeout=15)
+            else:
+                rr = self.s.post(url, timeout=15)
+            return str(getattr(rr, "status_code", "None"))
+        except Exception as e:
+            return f"ERR:{type(e).__name__}"
+
     def create_config(self, email, gb, days):
         if not self.base or (not self.username and not self.api_token):
             raise RuntimeError("panel_not_configured")
@@ -182,8 +194,15 @@ class XUIClient:
         r = self.s.post(add_url, data=payload, timeout=25)
         code = getattr(r, "status_code", None)
         if code != 200:
-            body = (getattr(r, "text", "") or "")[:150]
-            raise RuntimeError(f"addclient_http_{code} | auth={'token' if self.api_token else 'session'} | url={add_url} | resp={body}")
+            body = (getattr(r, "text", "") or "")[:120]
+            st = self._probe("GET", "/panel/api/server/status")
+            oa = self._probe("GET", "/panel/api/openapi.json")
+            lst = self._probe("GET", "/panel/api/inbounds/list")
+            raise RuntimeError(
+                f"addclient_http_{code} | auth={'token' if self.api_token else 'session'} "
+                f"| status_probe={st} | openapi_probe={oa} | inbounds_list={lst} "
+                f"| url={add_url} | resp={body}"
+            )
         try:
             ok = r.json().get("success", False)
         except Exception:
