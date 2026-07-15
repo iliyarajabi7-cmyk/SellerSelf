@@ -21,7 +21,7 @@ try:
 except Exception:
     cffi_requests = None
     _HAS_CFFI = False
-print(f"[config_seller] build=diag-v8-updatefix curl_cffi={_HAS_CFFI}", flush=True)
+print(f"[config_seller] build=diag-v9-tgidint curl_cffi={_HAS_CFFI}", flush=True)
 from datetime import datetime, timezone, timedelta
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -217,10 +217,11 @@ class XUIClient:
             "totalGB": total_bytes,
             "expiryTime": expiry,
             "enable": True,
-            "tgId": "",
+            "tgId": 0,
             "subId": sub_id,
             "flow": "",
             "limitIp": 0,
+            "reset": 0,
         }
         diags = []
         # روش ۱: endpoint استاندارد addClient
@@ -468,7 +469,7 @@ async def handle_cfg_callback(callback_query, bot, db, save_db, main_menu_keyboa
             res = await _make_and_store(db, user_id, gb, days, xui, False, panel)
         except Exception as e:
             await _notify_admin(bot, ADMIN_ID, f"🔥 خطا در ساخت کانفیگ برای {user_id}:\n`{e}`")
-            await _safe_edit(msg, "❌ خطا در ساخت کانفیگ. موجودی کسر نشد، با پشتیبانی در تماس باشید.", _back_home_kb())
+            await _safe_edit(msg, "❌ خطا در ساخت کانفیگ. موجودی کسر نشد�� با پشتیبانی در تماس باشید.", _back_home_kb())
             return await callback_query.answer()
         db[str(user_id)]["mah_balance"] = bal - price
         save_db(db)
