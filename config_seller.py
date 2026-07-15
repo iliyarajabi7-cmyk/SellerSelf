@@ -21,7 +21,7 @@ try:
 except Exception:
     cffi_requests = None
     _HAS_CFFI = False
-print(f"[config_seller] build=diag-v7-authsurface curl_cffi={_HAS_CFFI}", flush=True)
+print(f"[config_seller] build=diag-v8-updatefix curl_cffi={_HAS_CFFI}", flush=True)
 from datetime import datetime, timezone, timedelta
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -263,11 +263,28 @@ class XUIClient:
         if not isinstance(settings_obj.get("clients"), list):
             settings_obj["clients"] = []
         settings_obj["clients"].append(client)
-        upd_payload = dict(target)
+        # فقط فیلدهای معتبرِ اینباند را می‌فرستیم. هر مقدار پیچیده (dict/list)
+        # باید با JSON معتبر برود نه repr پایتون (که نقل‌قول تکی دارد و سرور
+        # خطای invalid character می‌دهد). فیلدهای آماری مثل clientStats را نمی‌فرستیم.
+        def _fld(v):
+            if isinstance(v, bool):
+                return "true" if v else "false"
+            if isinstance(v, (dict, list)):
+                return json.dumps(v)
+            return v
+        _keep = (
+            "up", "down", "total", "remark", "enable", "expiryTime",
+            "listen", "port", "protocol", "streamSettings", "tag",
+            "sniffing", "allocate",
+        )
+        upd_payload = {"id": self.inbound_id}
+        for _k in _keep:
+            if target.get(_k) is not None:
+                upd_payload[_k] = _fld(target[_k])
         upd_payload["settings"] = json.dumps(settings_obj)
         for upath in (
-            f"/panel/inbound/update/{self.inbound_id}",
             f"/panel/api/inbounds/update/{self.inbound_id}",
+            f"/panel/inbound/update/{self.inbound_id}",
         ):
             u_url = f"{self.base}{upath}"
             r = self.s.post(u_url, data=upd_payload, timeout=25)
