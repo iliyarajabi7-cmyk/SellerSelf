@@ -15,6 +15,12 @@ import json
 import time
 import uuid
 import requests
+try:
+    from curl_cffi import requests as cffi_requests
+    _HAS_CFFI = True
+except Exception:
+    cffi_requests = None
+    _HAS_CFFI = False
 from datetime import datetime, timezone, timedelta
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -94,7 +100,11 @@ class XUIClient:
         self.password = panel.get("password") or ""
         self.inbound_id = int(panel.get("inbound_id") or 1)
         self.sub_url_base = (panel.get("sub_url_base") or "").rstrip("/")
-        self.s = requests.Session()
+        # curl_cffi با اثرانگشت TLS کروم، از سد بات‌دیتکشن کلادفلر/رِیل‌وی رد می‌شود
+        if _HAS_CFFI:
+            self.s = cffi_requests.Session(impersonate="chrome")
+        else:
+            self.s = requests.Session()
         # هدرهای مرورگرمانند تا پنل/رِیل‌وی درخواست را 403 نکند
         self.s.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -253,7 +263,7 @@ def _mine_text(db, user_id):
 
 def _back_home_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 بازگشت به بخش کانفیگ", callback_data="cfg_home", style=ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton(text="🔙 بازگشت به ��خش کانفیگ", callback_data="cfg_home", style=ButtonStyle.PRIMARY)],
         [InlineKeyboardButton(text="🏠 منوی اصلی", callback_data="menu_main", style=ButtonStyle.DANGER)],
     ])
 
